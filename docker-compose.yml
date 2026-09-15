@@ -55,6 +55,8 @@ services:
     ports:
       - "9000:9000"
       - "9443:9443"
+    volumes:
+      - ./authentik/blueprints/bsystem-groups.yaml:/blueprints/bsystem-groups.yaml:ro
     networks: [frontend, data]
 
   authentik-worker:
@@ -65,6 +67,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./authentik/blueprints/bsystem-groups.yaml:/blueprints/bsystem-groups.yaml:ro
     networks: [data]
 
   integration-core:
@@ -76,12 +80,15 @@ services:
       DATABASE_URL: postgres://bsystem:${POSTGRES_PASSWORD}@postgres:5432/bsystem_integration?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       NATS_URL: nats://nats:4222
+      AUTHENTIK_USERINFO_URL: http://authentik-server:9000/application/o/userinfo/
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       nats:
+        condition: service_started
+      authentik-server:
         condition: service_started
     ports:
       - "8080:8080"
@@ -90,6 +97,9 @@ services:
   hub:
     build:
       context: ../bsystem-hub
+      args:
+        VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY}
+        VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID}
     restart: unless-stopped
     depends_on:
       integration-core:
