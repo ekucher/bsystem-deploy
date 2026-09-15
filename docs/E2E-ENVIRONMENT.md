@@ -66,9 +66,16 @@ docker compose -f docker-compose.e2e.yml down -v
 `INTEGRATION_CORE_CONTEXT` overrides where the Integration Core is built from;
 it defaults to `../bsystem-integration-core`.
 
-The stack shortens the adapter circuit window to 3s via
-`ADAPTER_CIRCUIT_OPEN_FOR`, so the scenarios can observe an upstream being
-shed and then recovering without sleeping through the production window.
+The stack shortens two adapter bounds so the scenarios can observe behaviour
+that production-length windows would make them sleep through:
+`ADAPTER_TIMEOUT` to 2s, so a hanging upstream is retried to exhaustion
+quickly, and `ADAPTER_CIRCUIT_OPEN_FOR` to 3s, so an upstream can be seen
+being shed and then recovering.
+
+Note that a scenario asserting an upstream *failure* must inject a fault that
+outlasts the retry budget. A single injected fault is retried away — which is
+the adapter behaving correctly, but says nothing about how a real outage
+normalizes.
 
 The scenarios skip themselves when `E2E_BASE_URL` is unset, so `go test ./...`
 is safe on a machine with no stack running.
@@ -98,7 +105,7 @@ is safe on a machine with no stack running.
 | Missing mappings | a contact with no upstream account gets no `client_id`; an absent mapping never broadens access |
 | Audit | a write produces an audit event carrying the caller's `USR-*` identity and the request ID |
 | Request correlation | `X-Request-ID` is echoed, generated when absent, and reaches the audit trail |
-| Upstream errors | 401/404/429/500 and a timeout all normalize to `502 upstream_unavailable` with the failing source, and the platform recovers afterwards |
+| Upstream errors | a sustained 401/404/429/500 or timeout normalizes to `502 upstream_unavailable` with the failing source, and the platform recovers afterwards |
 | Detail endpoints | each detail read matches the collection that described it, and role permissions apply identically to a single record |
 | IDOR | cross-type Global IDs, id walking, forged and malformed ids and upstream source ids are all refused with byte-identical responses |
 | Pagination | every collection is walkable by cursor at any page size, visiting each item once and terminating; over-large limits are clamped and forged cursors rejected |

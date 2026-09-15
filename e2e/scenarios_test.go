@@ -50,6 +50,10 @@ type platformError struct {
 	RequestID string `json:"request_id"`
 }
 
+// sustainedFailures is comfortably more than the adapter retry budget, so an
+// injected fault represents an outage rather than a blip the adapter absorbs.
+const sustainedFailures = 8
+
 func ready(t *testing.T) *Harness {
 	t.Helper()
 	harness := New(t)
@@ -640,12 +644,16 @@ func TestUpstreamErrorsAreNormalized(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			harness.InjectFault(t, test.mockURL, test.mockPath, test.injectCode, 0)
+			// The failure has to outlast the retry budget. A single injected
+			// fault would be retried away, which is the adapter behaving
+			// correctly but says nothing about how a real outage normalizes.
+			harness.InjectFaultTimes(t, test.mockURL, test.mockPath, test.injectCode, 0, sustainedFailures)
 			response := harness.API(t, http.MethodGet, test.apiPath, TokenAdmin, nil)
 			assertNormalizedUpstreamFailure(t, response, test.wantSource)
 
 			// The platform must recover once the upstream does: a normalized
 			// error is not a latched failure.
+			harness.ResetFaults(t, test.mockURL)
 			recovered := harness.API(t, http.MethodGet, test.apiPath, TokenAdmin, nil)
 			if recovered.Status != http.StatusOK {
 				t.Fatalf("after the upstream recovered, status = %d, want 200 (body: %s)", recovered.Status, truncate(recovered.Body))
@@ -658,14 +666,17 @@ func TestUpstreamErrorsAreNormalized(t *testing.T) {
 // failure, rather than as a stalled request.
 func TestUpstreamTimeoutIsNormalized(t *testing.T) {
 	harness := ready(t)
-	// The adapters bound every upstream call at 10s, so a 20s delay is
-	// guaranteed to trip the adapter timeout rather than merely being slow.
-	harness.InjectFault(t, harness.Redmine, "/projects.json", 0, 20000)
+	// Every attempt must hang, or the retry would find a healthy upstream and
+	// the timeout would never reach the caller. The delay comfortably exceeds
+	// the stack's per-attempt bound.
+	harness.InjectFaultTimes(t, harness.Redmine, "/projects.json", 0, 8000, sustainedFailures)
 	start := time.Now()
 	response := harness.API(t, http.MethodGet, "/api/v1/projects", TokenAdmin, nil)
 	elapsed := time.Since(start)
 	assertNormalizedUpstreamFailure(t, response, "redmine")
-	if elapsed > 20*time.Second {
+	// Bounded attempts against a hanging upstream must still return well
+	// before the injected delay would have.
+	if elapsed > 30*time.Second {
 		t.Fatalf("the adapter did not bound the upstream call: it took %s", elapsed)
 	}
 }

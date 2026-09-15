@@ -130,9 +130,11 @@ services:
       REDMINE_API_KEY: test-redmine-api-key
       OUTLINE_URL: http://mock-outline:8092
       OUTLINE_API_KEY: test-outline-api-key
-      # The production circuit window is 30s. The scenarios need to observe an
-      # upstream being shed and then recovering, so the stack shortens it
-      # rather than making the suite sleep through the real one.
+      # Production bounds are 10s per attempt and a 30s circuit window. The
+      # scenarios have to observe a timeout being retried to exhaustion and an
+      # upstream being shed and then recovering, so the stack shortens both
+      # rather than making the suite sleep through the real ones.
+      ADAPTER_TIMEOUT: 2s
       ADAPTER_CIRCUIT_OPEN_FOR: 3s
     depends_on:
       postgres:
