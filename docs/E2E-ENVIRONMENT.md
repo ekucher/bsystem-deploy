@@ -119,3 +119,12 @@ pointed at a production host: see `mocks/README.md` for the full list.
 The `Autonomous E2E` job in `.github/workflows/ci.yml` checks out the
 Integration Core alongside this repository, brings the stack up with
 `--wait`, runs the scenarios, and dumps stack logs when anything fails.
+
+The Integration Core repository runs the same stack from its own CI, building
+the core from the commit under review.
+
+Either side resolves the other's branch by name: if a branch with the same
+name exists in the other repository it is used, otherwise `main` is. A change
+that spans both repositories is therefore validated end to end before either
+side merges, and once merged each repository keeps validating against the
+other's `main`.

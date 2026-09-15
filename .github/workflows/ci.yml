@@ -84,10 +84,26 @@ jobs:
       - name: Checkout deployment repository
         uses: actions/checkout@v4
 
+      # A branch in the Integration Core with the same name as this one is
+      # used when it exists, so a change spanning both repositories can be
+      # validated before either side merges.
+      - name: Resolve the Integration Core branch
+        id: core-ref
+        run: |
+          ref="${{ github.head_ref || github.ref_name }}"
+          if git ls-remote --exit-code --heads https://github.com/ekucher/bsystem-integration-core "$ref" >/dev/null 2>&1; then
+            echo "Using matching bsystem-integration-core branch: $ref"
+          else
+            echo "No matching bsystem-integration-core branch; using main"
+            ref=main
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Checkout Integration Core
         uses: actions/checkout@v4
         with:
           repository: ekucher/bsystem-integration-core
+          ref: ${{ steps.core-ref.outputs.ref }}
           path: bsystem-integration-core
 
       - name: Setup Go
