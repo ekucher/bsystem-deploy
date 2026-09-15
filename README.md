@@ -6,6 +6,56 @@ Deployment and environment repository for BSYSTEM Platform.
 
 `bsystem-deploy` defines reproducible DEV, STAGE and PROD deployments for BSYSTEM services and integrated third-party platforms.
 
+## Current P0 stack
+
+The repository now contains a runnable Docker Compose foundation with:
+
+- PostgreSQL 17
+- Redis 7 for BSYSTEM application cache/state
+- NATS 2.11 with JetStream
+- authentik 2026.8.2 (`server` + `worker`)
+- `bsystem-integration-core`
+- `bsystem-hub`
+
+authentik does not use Redis in the current stack; Redis is reserved for BSYSTEM-owned services.
+
+## Quick start
+
+Clone these repositories side-by-side:
+
+```text
+workspace/
+├── bsystem-hub/
+├── bsystem-integration-core/
+└── bsystem-deploy/
+```
+
+Then:
+
+```bash
+cd bsystem-deploy
+cp .env.example .env
+# Replace all CHANGE_ME values.
+docker compose up -d --build
+```
+
+Verify:
+
+```bash
+docker compose ps
+curl http://localhost:8080/health
+curl http://localhost:8080/api/v1/modules
+curl http://localhost:8081/healthz
+```
+
+Local endpoints:
+
+- BSYSTEM HUB: `http://localhost:8081`
+- Integration Core: `http://localhost:8080`
+- authentik: `http://localhost:9000`
+
+Detailed runbook: [docs/RUN-P0.md](docs/RUN-P0.md).
+
 ## Deployment strategy
 
 Initial platform target:
@@ -26,7 +76,7 @@ Future migration to Kubernetes/k3s must be possible without changing application
 
 ## Initial stacks
 
-Recommended split:
+Recommended split as the platform grows:
 
 ```text
 01-core
@@ -63,7 +113,7 @@ Recommended split:
 - HTTPS terminates at the approved reverse proxy;
 - persistent data uses named volumes or explicitly managed storage;
 - backup/restore is part of deployment design;
-- every owned service must expose `/health`;
+- every owned service must expose `/health` (or `/healthz` for static edge containers);
 - upgrades must be version-pinned and documented.
 
 ## Related repositories
@@ -72,4 +122,4 @@ Recommended split:
 - `ekucher/bsystem-integration-core`
 - `ekucher/bsystem-design-system`
 
-See [Architecture](docs/ARCHITECTURE.md) and [Roadmap](docs/ROADMAP.md).
+See [Architecture](docs/ARCHITECTURE.md), [P0 Foundation](docs/P0-FOUNDATION.md), [Run P0](docs/RUN-P0.md), and [Roadmap](docs/ROADMAP.md).
