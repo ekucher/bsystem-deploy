@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare CI environment
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_PASSWORD=ci-postgres-password
+          AUTHENTIK_SECRET_KEY=ci-authentik-secret-key-abcdefghijklmnopqrstuvwxyz-0123456789
+          VITE_OIDC_AUTHORITY=http://localhost:9000/application/o/bsystem-hub/
+          VITE_OIDC_CLIENT_ID=ci-public-client
+          ESPOCRM_URL=
+          ESPOCRM_API_KEY=
+          REDMINE_URL=
+          REDMINE_API_KEY=
+          EOF
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Validate rendered configuration
+        run: docker compose config > /tmp/bsystem-compose.yml
