@@ -153,20 +153,18 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    # nginx binds port 80 and drops its workers to the nginx user, so it keeps
-    # exactly the capabilities that needs. The document root is immutable; the
-    # two paths nginx writes are tmpfs.
+    # The HUB image is nginx-unprivileged: it runs as uid 101 on port 8080 and
+    # needs no capability at all. Everything it writes — the pid file and the
+    # request temporary paths — is under /tmp.
     cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_OVERRIDE, SETGID, SETUID, NET_BIND_SERVICE]
     read_only: true
     tmpfs:
-      - /var/cache/nginx
-      - /var/run
+      - /tmp
     depends_on:
       integration-core:
         condition: service_started
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:8081:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:8081:8080"
     networks: [frontend]
 
 networks:

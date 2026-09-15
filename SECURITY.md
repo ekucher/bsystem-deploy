@@ -51,7 +51,7 @@ with a published CycloneDX SBOM.
 | nats | yes | `ALL` dropped | writable (JetStream store) |
 | authentik-server, authentik-worker | yes | left to the image | writable |
 | integration-core | yes | `ALL` dropped | read-only |
-| hub (nginx) | yes | `ALL` dropped, five re-added | read-only, tmpfs for cache and pid |
+| hub (nginx-unprivileged) | yes | `ALL` dropped | read-only, tmpfs for `/tmp` |
 | mock upstreams | yes | `ALL` dropped | read-only (scratch image) |
 
 The settings in `docker-compose.e2e.yml` are exercised on every push: the E2E
