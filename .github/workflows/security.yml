@@ -67,14 +67,14 @@ jobs:
       # no Docker Compose rules, so the Compose hardening is guarded instead
       # by scripts/check-hardening.py in the CI workflow.
       - name: Scan configuration
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           severity: CRITICAL,HIGH
           exit-code: "1"
 
       - name: Scan the filesystem
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scanners: vuln,secret
@@ -96,7 +96,7 @@ jobs:
         run: docker build --build-arg MOCK=mock-espocrm -t bsystem/mock:scan .
 
       - name: Scan the image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: bsystem/mock:scan
@@ -107,7 +107,7 @@ jobs:
       # An SBOM is what makes the next advisory answerable without a re-scan:
       # "were we shipping this package, and in which build?"
       - name: Generate an SBOM
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: bsystem/mock:scan
