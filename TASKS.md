@@ -268,36 +268,56 @@ Priority: MEDIUM-HIGH
 
 ## P6.1 Components
 
-- [ ] Input
-- [ ] Textarea
-- [ ] Select
-- [ ] Table
-- [ ] Dialog
-- [ ] Alert
-- [ ] Spinner
-- [ ] Skeleton
-- [ ] Tabs
-- [ ] Breadcrumbs
-- [ ] Dropdown
-- [ ] Pagination
-- [ ] StatusBadge
+- [x] Input
+- [x] Textarea
+- [x] Select
+- [x] Table
+- [x] Dialog
+- [x] Alert
+- [x] Spinner
+- [x] Skeleton
+- [x] Tabs
+- [x] Breadcrumbs
+- [x] Dropdown
+- [x] Pagination
+- [x] StatusBadge
 
 ## P6.2 Theme/accessibility
 
-- [ ] light semantic tokens
-- [ ] dark semantic tokens
-- [ ] keyboard support
-- [ ] focus states
-- [ ] ARIA/tests
+- [x] light semantic tokens
+- [x] dark semantic tokens
+- [x] keyboard support
+- [x] focus states
+- [x] ARIA/tests
 
 ## P6.3 Versioned distribution prep
 
-- [ ] changelog strategy
-- [ ] Changesets or equivalent
-- [ ] GitHub Packages/private npm documentation
-- [ ] package ready for versioned publishing
+- [x] changelog strategy
+- [x] Changesets or equivalent
+- [x] GitHub Packages/private npm documentation
+- [x] package ready for versioned publishing
 
-Publishing itself may be `[!] BLOCKED` if credentials/config are required.
+- [!] publishing itself
+
+```text
+BLOCKED:
+Task: Publish @bsystem/design-system to a registry
+Repository: ekucher/bsystem-design-system
+Reason: Three owner decisions, none of which this repository should make on
+  the owner's behalf: whether the package is published at all (it is still
+  `private: true`, which must be lifted deliberately rather than as a side
+  effect of a tooling change); whether `@bsystem` goes to GitHub Packages or
+  to a private registry; and who may publish, which is what a
+  `write:packages` token grants.
+What is required from owner: a decision on the registry, a publishing token
+  stored as a repository secret, and approval to lift `private: true`.
+Safe work already completed: Changesets configured with a bump policy,
+  CHANGELOG.md, package metadata and `publishConfig` for GitHub Packages,
+  test sources excluded from the build output, consumer `.npmrc` and
+  dependency instructions, and `docs/RELEASING.md` recording exactly what
+  remains. Publishing is one configuration step, not a project.
+Related commit/PR: ekucher/bsystem-design-system#3
+```
 
 # P7 — Observability
 
