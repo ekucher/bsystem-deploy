@@ -410,16 +410,16 @@ to drop their own privileges. Those are documented at the services.
 
 Priority: MEDIUM
 
-- [ ] persistence model
-- [ ] recipient/severity/source/title/body/deep-link/read-state
-- [ ] `GET /api/v1/notifications`
-- [ ] mark-read endpoint
-- [ ] pagination
-- [ ] authorization
-- [ ] event mappings for backup/test/build/incident failures
-- [ ] HUB notification center
-- [ ] unread badge
-- [ ] deep links
+- [-] persistence model
+- [-] recipient/severity/source/title/body/deep-link/read-state
+- [-] `GET /api/v1/notifications`
+- [-] mark-read endpoint
+- [-] pagination
+- [-] authorization
+- [-] event mappings for backup/test/build/incident failures
+- [-] HUB notification center
+- [-] unread badge
+- [-] deep links
 
 Do not invent production recipients.
 
