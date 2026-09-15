@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+version: 1
+metadata:
+  name: BSYSTEM - Base Groups
+entries:
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-Admins
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-Managers
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-Developers
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-QA
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-Support
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-DevOps
+    attrs:
+      is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-Customers
+    attrs:
+      is_superuser: false
