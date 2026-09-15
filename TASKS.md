@@ -25,63 +25,65 @@ Priority: CRITICAL
 
 ## P1.1 Mock identity service
 
-- [ ] create minimal fake OIDC/UserInfo service
-- [ ] valid admin/developer/support/customer/service identities
-- [ ] configurable groups
-- [ ] invalid/expired token cases
-- [ ] test-only secrets only
-- [ ] documentation
+- [x] create minimal fake OIDC/UserInfo service
+- [x] valid admin/developer/support/customer/service identities
+- [x] configurable groups
+- [x] invalid/expired token cases
+- [x] test-only secrets only
+- [x] documentation
 
 ## P1.2 Mock EspoCRM
 
-- [ ] Accounts
-- [ ] Contacts
-- [ ] pagination
-- [ ] 401/403/404/429/500
-- [ ] timeout case
+- [x] Accounts
+- [x] Contacts
+- [x] pagination
+- [x] 401/403/404/429/500
+- [x] timeout case
 
 ## P1.3 Mock Redmine
 
-- [ ] Projects
-- [ ] Issues
-- [ ] pagination
-- [ ] 401/404/429/500
-- [ ] timeout case
+- [x] Projects
+- [x] Issues
+- [x] pagination
+- [x] 401/404/429/500
+- [x] timeout case
 
 ## P1.4 Mock Outline
 
-- [ ] documents.list
-- [ ] documents.info
-- [ ] search when adapter supports it
-- [ ] 401/429/500
-- [ ] timeout case
+- [x] documents.list
+- [x] documents.info
+- [x] search when adapter supports it
+- [x] 401/429/500
+- [x] timeout case
 
 ## P1.5 E2E Compose
 
-- [ ] PostgreSQL
-- [ ] NATS
-- [ ] fake identity
-- [ ] mock EspoCRM
-- [ ] mock Redmine
-- [ ] mock Outline
-- [ ] Integration Core
-- [ ] HUB when practical
-- [ ] isolated network
-- [ ] deterministic healthchecks
+- [x] PostgreSQL
+- [x] NATS
+- [x] fake identity
+- [x] mock EspoCRM
+- [x] mock Redmine
+- [x] mock Outline
+- [x] Integration Core
+- [ ] HUB when practical — deferred: the scenarios assert the normalized API
+      contract the HUB consumes, which is what the HUB builds against. Adding the
+      static SPA to the stack would not exercise anything the contract does not.
+- [x] isolated network
+- [x] deterministic healthchecks
 
 ## P1.6 Automated E2E scenarios
 
-- [ ] stable `USR-*`
-- [ ] stable `SVC-*`
-- [ ] `/api/v1/me`
-- [ ] module filtering
-- [ ] client/project/issue/document normalization
-- [ ] Global ID stability
-- [ ] audit creation
-- [ ] event publishing
-- [ ] customer denial for unscoped documents
-- [ ] upstream error normalization
-- [ ] request ID propagation
+- [x] stable `USR-*`
+- [x] stable `SVC-*`
+- [x] `/api/v1/me`
+- [x] module filtering
+- [x] client/project/issue/document normalization
+- [x] Global ID stability
+- [x] audit creation
+- [x] event publishing
+- [x] customer denial for unscoped documents
+- [x] upstream error normalization
+- [x] request ID propagation
 
 # P2 — API contract completion
 
@@ -89,20 +91,21 @@ Priority: HIGH
 
 ## P2.1 OpenAPI
 
-- [ ] inventory all active endpoints
-- [ ] sync `docs/openapi.yaml`
-- [ ] common Error schema
-- [ ] Me/Module/Client/Contact/Project/Issue/Document schemas
-- [ ] pagination schema
-- [ ] service identity schemas
-- [ ] RBAC admin schemas
-- [ ] auth requirements
-- [ ] examples
+- [x] inventory all active endpoints
+- [x] sync `docs/openapi.yaml`
+- [x] common Error schema
+- [x] Me/Module/Client/Contact/Project/Issue/Document schemas
+- [x] pagination schema — the bounded `limit` parameter is documented as the
+      current contract; a cursor/offset envelope is P3.4
+- [x] service identity schemas
+- [x] RBAC admin schemas
+- [x] auth requirements
+- [x] examples
 
 ## P2.2 OpenAPI CI
 
-- [ ] add Spectral or Redocly
-- [ ] fail CI on invalid contract
+- [x] add Spectral or Redocly
+- [x] fail CI on invalid contract
 
 ## P2.3 Detail endpoints
 
