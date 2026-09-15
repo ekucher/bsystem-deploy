@@ -126,37 +126,38 @@ Priority: HIGH
 
 ## P3.1 Shared HTTP behavior
 
-- [ ] bounded timeouts
-- [ ] context cancellation
-- [ ] timeout/auth/rate-limit/upstream normalized errors
-- [ ] response body size limits
-- [ ] no credential logging
+- [x] bounded timeouts
+- [x] context cancellation
+- [x] timeout/auth/rate-limit/upstream normalized errors
+- [x] response body size limits
+- [x] no credential logging
 
 ## P3.2 Retry policy
 
-- [ ] safe/idempotent requests only
-- [ ] exponential backoff
-- [ ] jitter
-- [ ] bounded attempts
-- [ ] Retry-After support
-- [ ] tests
+- [x] safe/idempotent requests only
+- [x] exponential backoff
+- [x] jitter
+- [x] bounded attempts
+- [x] Retry-After support
+- [x] tests
 
 ## P3.3 Circuit breaker
 
-- [ ] closed/open/half-open states
-- [ ] configurable thresholds
-- [ ] metrics
-- [ ] health integration
-- [ ] deterministic tests
+- [x] closed/open/half-open states
+- [x] configurable thresholds
+- [x] metrics
+- [x] health integration
+- [x] deterministic tests
 
 ## P3.4 Pagination
 
-- [ ] EspoCRM Accounts/Contacts
-- [ ] Redmine Projects/Issues
-- [ ] Outline Documents
-- [ ] normalized `limit`
-- [ ] cursor/offset abstraction
-- [ ] bounded max page size
+- [x] EspoCRM Accounts/Contacts
+- [x] Redmine Projects/Issues
+- [x] Outline Documents
+- [x] normalized `limit`
+- [x] cursor/offset abstraction — opaque cursors, offset-encoded today; only
+      the codec changes when an upstream gains real cursors
+- [x] bounded max page size
 
 # P4 — Tenant isolation and authorization
 
