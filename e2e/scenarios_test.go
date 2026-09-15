@@ -37,6 +37,12 @@ type entityView struct {
 	UpdatedAt    string `json:"updated_at"`
 }
 
+// collectionResponse is the envelope every normalized collection returns.
+type collectionResponse struct {
+	Data       []entityView `json:"data"`
+	Pagination Pagination   `json:"pagination"`
+}
+
 type platformError struct {
 	Error     string `json:"error"`
 	Code      string `json:"code"`
@@ -365,8 +371,12 @@ func TestNormalizedEntitiesAndGlobalIDStability(t *testing.T) {
 			if response.Status != http.StatusOK {
 				t.Fatalf("status = %d, want 200 (body: %s)", response.Status, truncate(response.Body))
 			}
-			var items []entityView
-			response.JSON(t, &items)
+			var body collectionResponse
+			response.JSON(t, &body)
+			items := body.Data
+			if body.Pagination.Total != test.wantCount {
+				t.Fatalf("pagination.total = %d, want %d", body.Pagination.Total, test.wantCount)
+			}
 			if len(items) != test.wantCount {
 				t.Fatalf("returned %d items, want %d", len(items), test.wantCount)
 			}
@@ -392,9 +402,9 @@ func TestNormalizedEntitiesAndGlobalIDStability(t *testing.T) {
 			// Global IDs are immutable: a second read of the same upstream
 			// records must return exactly the same mapping.
 			repeat := harness.API(t, http.MethodGet, test.path, test.token, nil)
-			var again []entityView
-			repeat.JSON(t, &again)
-			for _, item := range again {
+			var repeated collectionResponse
+			repeat.JSON(t, &repeated)
+			for _, item := range repeated.Data {
 				sourceID, ok := byGlobalID[item.ID]
 				if !ok {
 					t.Errorf("Global ID %q appeared only on the second read", item.ID)
@@ -412,10 +422,10 @@ func TestNormalizedEntitiesAndGlobalIDStability(t *testing.T) {
 // absent mapping has to narrow what is returned, never broaden it.
 func TestUnmappedContactHasNoClientLink(t *testing.T) {
 	harness := ready(t)
-	var contacts []entityView
-	harness.API(t, http.MethodGet, "/api/v1/contacts", TokenAdmin, nil).JSON(t, &contacts)
+	var body collectionResponse
+	harness.API(t, http.MethodGet, "/api/v1/contacts", TokenAdmin, nil).JSON(t, &body)
 	found := false
-	for _, contact := range contacts {
+	for _, contact := range body.Data {
 		if contact.SourceID != "ct-dmytro" {
 			continue
 		}

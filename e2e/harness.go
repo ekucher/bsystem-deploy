@@ -81,6 +81,13 @@ func New(t *testing.T) *Harness {
 	}
 }
 
+// Pagination is the pagination block every normalized collection returns.
+type Pagination struct {
+	Total      int    `json:"total"`
+	Limit      int    `json:"limit"`
+	NextCursor string `json:"next_cursor"`
+}
+
 // Response is a decoded platform response.
 type Response struct {
 	Status  int
@@ -151,6 +158,23 @@ func (h *Harness) API(t *testing.T, method, path, token string, body any) Respon
 func (h *Harness) InjectFault(t *testing.T, mockURL, path string, status, delayMS int) {
 	t.Helper()
 	fault := map[string]any{"path": path}
+	if status != 0 {
+		fault["status"] = status
+	}
+	if delayMS != 0 {
+		fault["delay_ms"] = delayMS
+	}
+	response := h.Request(t, http.MethodPost, mockURL+"/__mock/faults", "", fault, nil)
+	if response.Status != http.StatusAccepted {
+		t.Fatalf("inject fault on %s: status = %d, body = %s", mockURL, response.Status, truncate(response.Body))
+	}
+	t.Cleanup(func() { h.ResetFaults(t, mockURL) })
+}
+
+// InjectFaultTimes queues a fault that applies to the next count requests.
+func (h *Harness) InjectFaultTimes(t *testing.T, mockURL, path string, status, delayMS, count int) {
+	t.Helper()
+	fault := map[string]any{"path": path, "remaining": count}
 	if status != 0 {
 		fault["status"] = status
 	}

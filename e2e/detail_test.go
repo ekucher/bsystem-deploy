@@ -14,12 +14,12 @@ func collect(t *testing.T, harness *Harness, path, token string) []entityView {
 	if response.Status != http.StatusOK {
 		t.Fatalf("GET %s: status = %d, want 200 (body: %s)", path, response.Status, truncate(response.Body))
 	}
-	var items []entityView
-	response.JSON(t, &items)
-	if len(items) == 0 {
+	var body collectionResponse
+	response.JSON(t, &body)
+	if len(body.Data) == 0 {
 		t.Fatalf("GET %s returned nothing to read in detail", path)
 	}
-	return items
+	return body.Data
 }
 
 // --- Detail endpoints -------------------------------------------------------

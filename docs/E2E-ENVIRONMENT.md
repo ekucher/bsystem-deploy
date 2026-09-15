@@ -66,6 +66,10 @@ docker compose -f docker-compose.e2e.yml down -v
 `INTEGRATION_CORE_CONTEXT` overrides where the Integration Core is built from;
 it defaults to `../bsystem-integration-core`.
 
+The stack shortens the adapter circuit window to 3s via
+`ADAPTER_CIRCUIT_OPEN_FOR`, so the scenarios can observe an upstream being
+shed and then recovering without sleeping through the production window.
+
 The scenarios skip themselves when `E2E_BASE_URL` is unset, so `go test ./...`
 is safe on a machine with no stack running.
 
@@ -95,6 +99,11 @@ is safe on a machine with no stack running.
 | Audit | a write produces an audit event carrying the caller's `USR-*` identity and the request ID |
 | Request correlation | `X-Request-ID` is echoed, generated when absent, and reaches the audit trail |
 | Upstream errors | 401/404/429/500 and a timeout all normalize to `502 upstream_unavailable` with the failing source, and the platform recovers afterwards |
+| Detail endpoints | each detail read matches the collection that described it, and role permissions apply identically to a single record |
+| IDOR | cross-type Global IDs, id walking, forged and malformed ids and upstream source ids are all refused with byte-identical responses |
+| Pagination | every collection is walkable by cursor at any page size, visiting each item once and terminating; over-large limits are clamped and forged cursors rejected |
+| Retries | a single transient upstream failure is absorbed; the budget is bounded; a deterministic failure is never retried |
+| Circuit breaker | a sustained outage is shed, reported in `/readyz` and `/metrics` without making the platform unready, leaves other adapters serving, and closes again on recovery |
 | Secret safety | no rejection or upstream error discloses a credential, an internal hostname or a stack trace |
 | Events | a service-published envelope reaches `bsystem.events.<event>` with its `SVC-*` actor and request ID; publishing is refused to humans and validated |
 
