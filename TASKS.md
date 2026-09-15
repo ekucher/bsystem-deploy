@@ -325,32 +325,32 @@ Priority: HIGH
 
 ## P7.1 Structured JSON logs
 
-- [ ] timestamp/level/message
-- [ ] request_id
-- [ ] route/method/status/duration
-- [ ] actor Global ID when safe
-- [ ] credential-safe redaction
+- [x] timestamp/level/message
+- [x] request_id
+- [x] route/method/status/duration
+- [x] actor Global ID when safe
+- [x] credential-safe redaction
 
 ## P7.2 Metrics
 
-- [ ] HTTP request count
-- [ ] latency
-- [ ] status class
-- [ ] bounded route labels
-- [ ] adapter requests/failures/latency/rate-limit/circuit
-- [ ] DB pool metrics
-- [ ] NATS status/publish metrics
+- [x] HTTP request count
+- [x] latency
+- [x] status class
+- [x] bounded route labels
+- [x] adapter requests/failures/latency/rate-limit/circuit
+- [x] DB pool metrics
+- [x] NATS status/publish metrics
 
 ## P7.3 Grafana
 
-- [ ] dashboard JSON
-- [ ] requests
-- [ ] errors
-- [ ] latency
-- [ ] DB
-- [ ] NATS
-- [ ] adapters
-- [ ] datasource assumptions documented
+- [x] dashboard JSON
+- [x] requests
+- [x] errors
+- [x] latency
+- [x] DB
+- [x] NATS
+- [x] adapters
+- [x] datasource assumptions documented
 
 # P8 — Security automation
 
