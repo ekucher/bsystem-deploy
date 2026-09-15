@@ -218,45 +218,49 @@ Priority: HIGH
 
 ## P5.1 Routing
 
-- [ ] React Router
-- [ ] `/`
-- [ ] `/profile`
-- [ ] `/clients`
-- [ ] `/clients/:id`
-- [ ] `/projects`
-- [ ] `/projects/:id`
-- [ ] `/issues`
-- [ ] `/documents`
-- [ ] `/403`
-- [ ] `/404`
+- [x] React Router
+- [x] `/`
+- [x] `/profile`
+- [x] `/clients`
+- [x] `/clients/:id`
+- [x] `/projects`
+- [x] `/projects/:id`
+- [x] `/issues`
+- [x] `/documents`
+- [x] `/403`
+- [x] `/404`
 
 ## P5.2 API client
 
-- [ ] centralized API client
-- [ ] Bearer token handling
-- [ ] request ID support
-- [ ] normalized error parsing
-- [ ] 401/403 handling
-- [ ] cancellation
+- [x] centralized API client
+- [x] Bearer token handling
+- [x] request ID support
+- [x] normalized error parsing
+- [x] 401/403 handling
+- [x] cancellation
 
 ## P5.3 Dashboard and pages
 
-- [ ] current user summary
-- [ ] module cards
-- [ ] integration health summary
-- [ ] Clients list/detail
-- [ ] Projects list/detail
-- [ ] Issues list
-- [ ] Documents list
-- [ ] loading/empty/error states
+- [x] current user summary
+- [x] module cards
+- [ ] integration health summary — adapter health is on the machine API
+      (`/api/service/v1/adapters/health`), which a human token cannot reach.
+      Surfacing it needs a human-API endpoint first; raised as a gap, not done
+      by widening the service boundary
+- [x] Clients list/detail
+- [x] Projects list/detail
+- [x] Issues list
+- [x] Documents list
+- [x] loading/empty/error states
 
 ## P5.4 Accessibility
 
-- [ ] keyboard navigation
-- [ ] visible focus
-- [ ] semantic headings
-- [ ] labels
-- [ ] automated accessibility checks
+- [x] keyboard navigation
+- [x] visible focus
+- [x] semantic headings
+- [x] labels
+- [x] automated accessibility checks — axe over every page; verified to fail
+      on an injected violation. Contrast is not checkable in jsdom
 
 # P6 — Design System
 
@@ -336,7 +340,10 @@ Priority: HIGH
 - [ ] go test -race
 - [ ] staticcheck
 - [ ] npm audit policy
-- [ ] ESLint where missing
+- [!] ESLint where missing — blocked upstream for the HUB: `typescript-eslint`
+      peers on `typescript >=4.8.4 <6.1.0` and the HUB is on TypeScript 7.
+      Adding it means forcing an unsupported resolution or downgrading the
+      compiler. `tsc --strict`, the tests and the axe checks run instead
 - [ ] Gitleaks
 - [ ] Trivy filesystem scan
 - [ ] Docker image scan where applicable
