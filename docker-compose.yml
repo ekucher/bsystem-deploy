@@ -1,0 +1,116 @@
+name: bsystem-platform
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bsystem
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bsystem -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [data]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [data]
+
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    command: ["-js", "-m", "8222"]
+    volumes:
+      - nats_data:/data
+    networks: [backend]
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.8.2
+    restart: unless-stopped
+    command: server
+    environment: &authentik_env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: bsystem
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
+      AUTHENTIK_REDIS__HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    networks: [frontend, data]
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.8.2
+    restart: unless-stopped
+    command: worker
+    environment: *authentik_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [data]
+
+  integration-core:
+    build:
+      context: ../bsystem-integration-core
+    restart: unless-stopped
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://bsystem:${POSTGRES_PASSWORD}@postgres:5432/bsystem_integration?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      NATS_URL: nats://nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    networks: [frontend, backend, data]
+
+  hub:
+    build:
+      context: ../bsystem-hub
+    restart: unless-stopped
+    depends_on:
+      integration-core:
+        condition: service_started
+    ports:
+      - "8081:80"
+    networks: [frontend]
+
+networks:
+  frontend:
+  backend:
+    internal: true
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  nats_data:
