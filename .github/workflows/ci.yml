@@ -10,6 +10,42 @@ permissions:
   contents: read
 
 jobs:
+  mocks:
+    name: Mock upstreams
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mocks
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: mocks/go.mod
+          cache: false
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt required for: $unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Build mock images
+        run: |
+          for mock in mock-identity mock-espocrm mock-redmine mock-outline; do
+            docker build --build-arg "MOCK=$mock" -t "bsystem/$mock:ci" .
+          done
+
   compose:
     runs-on: ubuntu-latest
     steps:
