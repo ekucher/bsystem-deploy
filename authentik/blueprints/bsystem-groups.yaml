@@ -38,3 +38,8 @@ entries:
       name: BSYSTEM-Customers
     attrs:
       is_superuser: false
+  - model: authentik_core.group
+    identifiers:
+      name: BSYSTEM-Services
+    attrs:
+      is_superuser: false
