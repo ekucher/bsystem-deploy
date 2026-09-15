@@ -81,6 +81,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       NATS_URL: nats://nats:4222
       AUTHENTIK_USERINFO_URL: http://authentik-server:9000/application/o/userinfo/
+      ESPOCRM_URL: ${ESPOCRM_URL:-}
+      ESPOCRM_API_KEY: ${ESPOCRM_API_KEY:-}
+      REDMINE_URL: ${REDMINE_URL:-}
+      REDMINE_API_KEY: ${REDMINE_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
