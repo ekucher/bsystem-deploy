@@ -1,0 +1,121 @@
+# Autonomous E2E environment
+
+The E2E stack validates BSYSTEM end to end without owner credentials,
+production access or any real upstream system. It is the foundation the rest
+of the backlog depends on: authorization, adapter and contract work can all be
+proven here before any production acceptance step is possible.
+
+## What it runs
+
+```mermaid
+flowchart TB
+    harness["E2E harness<br/>(e2e/, Go, no dependencies)"]
+
+    subgraph stack["docker-compose.e2e.yml"]
+        core["Integration Core"]
+        identity["mock-identity<br/>:9000"]
+        espocrm["mock-espocrm<br/>:8090"]
+        redmine["mock-redmine<br/>:8091"]
+        outline["mock-outline<br/>:8092"]
+        nats["NATS<br/>:4222"]
+        postgres["PostgreSQL<br/>(internal only)"]
+    end
+
+    harness -->|"normalized API"| core
+    harness -->|"fault injection"| espocrm
+    harness -->|"fault injection"| redmine
+    harness -->|"fault injection"| outline
+    harness -->|"subscribe bsystem.events.>"| nats
+
+    core --> identity
+    core --> espocrm
+    core --> redmine
+    core --> outline
+    core --> nats
+    core --> postgres
+```
+
+authentik, EspoCRM, Redmine and Outline are each replaced by a deterministic
+mock. The HUB is not part of the stack: the scenarios assert the normalized API
+contract the HUB consumes, which is what the HUB's own CI needs to build
+against.
+
+## Network isolation
+
+| Network | Internal | Members |
+| --- | --- | --- |
+| `e2e-edge` | no | Integration Core, the four mocks, NATS |
+| `e2e-data` | yes | PostgreSQL, Integration Core |
+
+PostgreSQL is only reachable from inside the stack. Every published port binds
+to `127.0.0.1`, so nothing is exposed beyond the machine running the stack.
+
+## Running it
+
+```bash
+# From the repository root, with bsystem-integration-core checked out alongside
+docker compose -f docker-compose.e2e.yml up -d --build --wait
+
+cd e2e
+E2E_BASE_URL=http://127.0.0.1:8080 go test -v ./...
+
+cd ..
+docker compose -f docker-compose.e2e.yml down -v
+```
+
+`INTEGRATION_CORE_CONTEXT` overrides where the Integration Core is built from;
+it defaults to `../bsystem-integration-core`.
+
+The scenarios skip themselves when `E2E_BASE_URL` is unset, so `go test ./...`
+is safe on a machine with no stack running.
+
+## Harness configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `E2E_BASE_URL` | none — unset skips every scenario | Integration Core |
+| `E2E_IDENTITY_URL` | `http://127.0.0.1:9000` | identity mock |
+| `E2E_ESPOCRM_URL` | `http://127.0.0.1:8090` | CRM mock control plane |
+| `E2E_REDMINE_URL` | `http://127.0.0.1:8091` | Redmine mock control plane |
+| `E2E_OUTLINE_URL` | `http://127.0.0.1:8092` | Outline mock control plane |
+| `E2E_NATS_ADDR` | `127.0.0.1:4222` | event bus |
+
+## What the scenarios prove
+
+| Area | Assertions |
+| --- | --- |
+| Identity | `USR-*` and `SVC-*` allocation is stable across requests; unknown and expired tokens are refused |
+| RBAC | every BSYSTEM group resolves to its role and permissions; an ungrouped principal resolves to nothing |
+| Module filtering | the customer module set is a strict subset of the administrator's and excludes internal modules |
+| Normalization | clients, contacts, projects, issues and documents carry Global IDs, `source` and `source_id` |
+| Global ID immutability | repeated reads and repeated mappings return the identifier already allocated |
+| Tenant isolation | a customer is denied unscoped documents with `scope_required`, and the denial discloses no document data |
+| Authorization matrix | per-role allow and deny cases across every business resource, the audit trail and Global ID administration |
+| Missing mappings | a contact with no upstream account gets no `client_id`; an absent mapping never broadens access |
+| Audit | a write produces an audit event carrying the caller's `USR-*` identity and the request ID |
+| Request correlation | `X-Request-ID` is echoed, generated when absent, and reaches the audit trail |
+| Upstream errors | 401/404/429/500 and a timeout all normalize to `502 upstream_unavailable` with the failing source, and the platform recovers afterwards |
+| Secret safety | no rejection or upstream error discloses a credential, an internal hostname or a stack trace |
+| Events | a service-published envelope reaches `bsystem.events.<event>` with its `SVC-*` actor and request ID; publishing is refused to humans and validated |
+
+## Fault injection
+
+Upstream failures are reproduced through each mock's test-only control plane
+rather than by editing fixtures. See `mocks/README.md` for the full contract.
+
+```bash
+curl -X POST http://127.0.0.1:8090/__mock/faults -d '{"path":"/api/v1/Account","status":500}'
+curl -X DELETE http://127.0.0.1:8090/__mock/faults
+```
+
+## Security
+
+Every credential in the stack is a documented test-only placeholder that
+cannot reach a real system, and every fixture is invented. Nothing here may be
+pointed at a production host: see `mocks/README.md` for the full list.
+
+## CI
+
+The `Autonomous E2E` job in `.github/workflows/ci.yml` checks out the
+Integration Core alongside this repository, brings the stack up with
+`--wait`, runs the scenarios, and dumps stack logs when anything fails.

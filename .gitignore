@@ -1,2 +1,5 @@
 .env
 *.local
+/bsystem-integration-core/
+/bsystem-hub/
+/bsystem-design-system/

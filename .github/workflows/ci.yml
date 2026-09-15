@@ -70,3 +70,69 @@ jobs:
 
       - name: Validate rendered configuration
         run: docker compose config > /tmp/bsystem-compose.yml
+
+      - name: Validate E2E Docker Compose
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml config --quiet
+
+  e2e:
+    name: Autonomous E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout deployment repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Integration Core
+        uses: actions/checkout@v4
+        with:
+          repository: ekucher/bsystem-integration-core
+          path: bsystem-integration-core
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+          cache: false
+
+      - name: Check formatting
+        working-directory: e2e
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt required for: $unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        working-directory: e2e
+        run: go vet ./...
+
+      - name: Start the E2E stack
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 300
+
+      - name: Run E2E scenarios
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: http://127.0.0.1:8080
+          E2E_IDENTITY_URL: http://127.0.0.1:9000
+          E2E_ESPOCRM_URL: http://127.0.0.1:8090
+          E2E_REDMINE_URL: http://127.0.0.1:8091
+          E2E_OUTLINE_URL: http://127.0.0.1:8092
+          E2E_NATS_ADDR: 127.0.0.1:4222
+        run: go test -v -count=1 -timeout 15m ./...
+
+      - name: Collect stack logs on failure
+        if: failure()
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml logs --no-color --tail=300
+
+      - name: Tear down the E2E stack
+        if: always()
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml down -v --remove-orphans
