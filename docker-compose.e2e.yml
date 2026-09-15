@@ -16,6 +16,13 @@ services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The postgres entrypoint starts as root and drops to the postgres user,
+    # so it keeps the capabilities that requires and nothing else. PGDATA is
+    # written, so the filesystem cannot be read-only.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     environment:
       POSTGRES_USER: bsystem
       POSTGRES_PASSWORD: e2e-test-postgres-password
@@ -34,6 +41,11 @@ services:
   nats:
     image: nats:2.11-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The nats image already runs as an unprivileged user; JetStream writes to
+    # /data, so the filesystem stays writable.
+    cap_drop: [ALL]
     command: ["-js", "-sd", "/data", "-m", "8222"]
     ports:
       # Published so the E2E harness can subscribe and assert on published
@@ -48,6 +60,12 @@ services:
       args:
         MOCK: mock-identity
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
     environment:
       HTTP_ADDR: ":9000"
       IDENTITY_ISSUER: http://mock-identity:9000/application/o/bsystem-hub/
@@ -66,6 +84,12 @@ services:
       args:
         MOCK: mock-espocrm
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
     environment:
       HTTP_ADDR: ":8090"
       ESPOCRM_API_KEY: test-espocrm-api-key
@@ -85,6 +109,12 @@ services:
       args:
         MOCK: mock-redmine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
     environment:
       HTTP_ADDR: ":8091"
       REDMINE_API_KEY: test-redmine-api-key
@@ -103,6 +133,12 @@ services:
       args:
         MOCK: mock-outline
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
     environment:
       HTTP_ADDR: ":8092"
       OUTLINE_API_KEY: test-outline-api-key
@@ -119,6 +155,12 @@ services:
     build:
       context: ${INTEGRATION_CORE_CONTEXT:-../bsystem-integration-core}
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The server runs as a non-root user from the image and writes nothing to
+    # disk: logs go to stdout and every cache is in memory.
+    cap_drop: [ALL]
+    read_only: true
     environment:
       HTTP_ADDR: ":8080"
       DATABASE_URL: postgres://bsystem:e2e-test-postgres-password@postgres:5432/bsystem_integration?sslmode=disable

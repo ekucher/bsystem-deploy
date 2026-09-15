@@ -71,6 +71,13 @@ jobs:
       - name: Validate rendered configuration
         run: docker compose config > /tmp/bsystem-compose.yml
 
+      - name: Check container hardening
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check-hardening.py docker-compose.yml docker-compose.e2e.yml
+
       - name: Validate E2E Docker Compose
         env:
           INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core

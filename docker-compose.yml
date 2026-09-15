@@ -1,9 +1,27 @@
+# BSYSTEM platform stack.
+#
+# Published ports bind to ${BIND_ADDRESS:-127.0.0.1} so a `docker compose up`
+# on a host with a public interface does not expose authentik, the Integration
+# Core or the HUB to the internet. Put a TLS-terminating proxy in front and set
+# BIND_ADDRESS deliberately when that is what you want.
+#
+# The hardening below (no-new-privileges, dropped capabilities, read-only root
+# filesystems) is validated against this file by `docker compose config` and,
+# for the equivalent settings in docker-compose.e2e.yml, exercised by the E2E
+# job on every push. This file's own services are not run in CI.
 name: bsystem-platform
 
 services:
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The postgres entrypoint starts as root and drops to the postgres user,
+    # so it keeps the capabilities that requires and nothing else. PGDATA is
+    # written, so the filesystem cannot be read-only.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     environment:
       POSTGRES_USER: bsystem
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -21,6 +39,12 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # Same shape as postgres: the entrypoint drops to the redis user, and the
+    # append-only file is written to /data.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, SETGID, SETUID]
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -34,6 +58,11 @@ services:
   nats:
     image: nats:2.11-alpine
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The nats image already runs as an unprivileged user; JetStream writes to
+    # /data, so the filesystem stays writable.
+    cap_drop: [ALL]
     command: ["-js", "-sd", "/data", "-m", "8222"]
     volumes:
       - nats_data:/data
@@ -42,6 +71,12 @@ services:
   authentik-server:
     image: ghcr.io/goauthentik/server:2026.8.2
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # authentik's entrypoint manages its own privileges, runs migrations and
+    # writes media and certificate material. Only no-new-privileges is applied
+    # here: a capability set for it belongs in an owner-run hardening pass
+    # against a real deployment, not in an unverified guess.
     command: server
     environment: &authentik_env
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
@@ -53,8 +88,8 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "9000:9000"
-      - "9443:9443"
+      - "${BIND_ADDRESS:-127.0.0.1}:9000:9000"
+      - "${BIND_ADDRESS:-127.0.0.1}:9443:9443"
     volumes:
       - ./authentik/blueprints/bsystem-groups.yaml:/blueprints/bsystem-groups.yaml:ro
     networks: [frontend, data]
@@ -62,6 +97,9 @@ services:
   authentik-worker:
     image: ghcr.io/goauthentik/server:2026.8.2
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # See authentik-server: privileges are left to the image's own entrypoint.
     command: worker
     environment: *authentik_env
     depends_on:
@@ -75,6 +113,12 @@ services:
     build:
       context: ../bsystem-integration-core
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The server runs as a non-root user from the image and writes nothing to
+    # disk: logs go to stdout and every cache is in memory.
+    cap_drop: [ALL]
+    read_only: true
     environment:
       HTTP_ADDR: ":8080"
       DATABASE_URL: postgres://bsystem:${POSTGRES_PASSWORD}@postgres:5432/bsystem_integration?sslmode=disable
@@ -97,7 +141,7 @@ services:
       authentik-server:
         condition: service_started
     ports:
-      - "8080:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:8080:8080"
     networks: [frontend, backend, data]
 
   hub:
@@ -107,11 +151,22 @@ services:
         VITE_OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY}
         VITE_OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID}
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # nginx binds port 80 and drops its workers to the nginx user, so it keeps
+    # exactly the capabilities that needs. The document root is immutable; the
+    # two paths nginx writes are tmpfs.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, SETGID, SETUID, NET_BIND_SERVICE]
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
     depends_on:
       integration-core:
         condition: service_started
     ports:
-      - "8081:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:8081:80"
     networks: [frontend]
 
 networks:
