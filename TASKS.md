@@ -356,30 +356,55 @@ Priority: HIGH
 
 Priority: HIGH
 
-- [ ] govulncheck
-- [ ] go test -race
-- [ ] staticcheck
-- [ ] npm audit policy
+- [x] govulncheck
+- [x] go test -race
+- [x] staticcheck
+- [x] npm audit policy
 - [!] ESLint where missing — blocked upstream for the HUB: `typescript-eslint`
       peers on `typescript >=4.8.4 <6.1.0` and the HUB is on TypeScript 7.
       Adding it means forcing an unsupported resolution or downgrading the
       compiler. `tsc --strict`, the tests and the axe checks run instead
-- [ ] Gitleaks
-- [ ] Trivy filesystem scan
-- [ ] Docker image scan where applicable
-- [ ] SBOM generation
-- [ ] dependency review where available
-- [ ] CodeQL where useful
+- [x] Gitleaks — full history in all four repositories
+- [x] Trivy filesystem scan
+- [x] Docker image scan where applicable — the mock upstream image; the HUB
+      and Integration Core images are covered by their repositories' Dockerfile
+      misconfiguration scans
+- [x] SBOM generation — CycloneDX, published as a build artifact
+- [x] dependency review where available — Dependabot for npm and Actions
+- [x] CodeQL where useful — Go in the Integration Core, TypeScript in the HUB
+      and design system
+
+Findings the scans produced and how they were resolved:
+
+- `golang.org/x/text` v0.35.0 GO-2026-5970, reachable through `pgxpool.New`,
+  upgraded to v0.39.0 and later v0.41.0
+- `golang.org/x/crypto` v0.49.0, ten HIGH ssh advisories, upgraded to v0.55.0
+- `react-router-dom` 7.9.1, two HIGH advisories on the HUB's redirect-based
+  authentication path, upgraded to 7.18.4
+- `vitest` 3.2.4 critical, upgraded to 5.0.1 in both Node repositories
+- the mock image linked a Go 1.24 standard library carrying twelve advisories;
+  both deploy modules now require go 1.26.6
+- the HUB image ran nginx as root; it is now nginx-unprivileged as uid 101
 
 Docker hardening review:
 
-- [ ] non-root
-- [ ] no-new-privileges
-- [ ] read-only filesystem where practical
-- [ ] tmpfs where practical
-- [ ] explicit networks
-- [ ] bounded exposed ports
-- [ ] no secrets in layers
+- [x] non-root — every service; the HUB moved to nginx-unprivileged and the
+      mocks are scratch images running as 65532
+- [x] no-new-privileges — every service in both Compose files
+- [x] read-only filesystem where practical — Integration Core, HUB, mocks
+- [x] tmpfs where practical — the HUB's `/tmp`
+- [x] explicit networks — internal `data`/`backend` and `e2e-data` networks
+- [x] bounded exposed ports — published ports bind `${BIND_ADDRESS:-127.0.0.1}`
+- [x] no secrets in layers — build arguments carry only public OIDC client
+      configuration; credentials arrive as runtime environment
+
+`scripts/check-hardening.py` runs in CI and fails on a regression in any of
+the above; `docker-compose.e2e.yml` is additionally started for real by the
+E2E job, so a capability set that breaks a container fails the build.
+
+Capabilities are left to the image's own entrypoint for authentik, and
+postgres and redis keep the five and four capabilities their entrypoints need
+to drop their own privileges. Those are documented at the services.
 
 # P9 — Notifications
 
