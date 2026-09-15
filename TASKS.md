@@ -109,16 +109,16 @@ Priority: HIGH
 
 ## P2.3 Detail endpoints
 
-- [ ] `GET /api/v1/clients/{id}`
-- [ ] `GET /api/v1/contacts/{id}`
-- [ ] `GET /api/v1/projects/{id}`
-- [ ] `GET /api/v1/issues/{id}`
-- [ ] `GET /api/v1/documents/{id}`
-- [ ] Global ID resolution
-- [ ] permission + scope enforcement
-- [ ] normalized 404
-- [ ] tests
-- [ ] OpenAPI update
+- [x] `GET /api/v1/clients/{id}`
+- [x] `GET /api/v1/contacts/{id}`
+- [x] `GET /api/v1/projects/{id}`
+- [x] `GET /api/v1/issues/{id}`
+- [x] `GET /api/v1/documents/{id}`
+- [x] Global ID resolution
+- [x] permission + scope enforcement
+- [x] normalized 404
+- [x] tests
+- [x] OpenAPI update
 
 # P3 — Adapter hardening
 
@@ -164,49 +164,52 @@ Priority: CRITICAL
 
 ## P4.1 Scope evaluator
 
-- [ ] reusable evaluator
-- [ ] global/tenant/client/project/resource scopes
-- [ ] deny-by-default
-- [ ] remove duplicated route auth logic
+- [x] reusable evaluator
+- [x] global/tenant/client/project/resource scopes
+- [x] deny-by-default
+- [x] remove duplicated route auth logic
 
 ## P4.2 Authorization matrix tests
 
 Roles:
 
-- [ ] Administrator
-- [ ] Manager
-- [ ] Developer
-- [ ] QA
-- [ ] Support
-- [ ] DevOps
-- [ ] Customer
-- [ ] Read Only
-- [ ] Service Core
+- [x] Administrator
+- [x] Manager
+- [x] Developer
+- [x] QA
+- [x] Support
+- [x] DevOps
+- [x] Customer
+- [ ] Read Only — no such role exists. An unmapped principal resolves to no
+      roles, permissions or modules and is denied everywhere; that case is
+      covered instead
+- [x] Service Core
 
 Resources:
 
-- [ ] clients
-- [ ] contacts
-- [ ] projects
-- [ ] issues
-- [ ] documents
-- [ ] RBAC admin
-- [ ] service API
+- [x] clients
+- [x] contacts
+- [x] projects
+- [x] issues
+- [x] documents
+- [x] RBAC admin
+- [x] service API
 
 ## P4.3 IDOR tests
 
-- [ ] Client Global ID manipulation
-- [ ] Project Global ID manipulation
-- [ ] Document Global ID manipulation
-- [ ] source ID manipulation if exposed
-- [ ] cross-tenant denial
-- [ ] missing mapping cannot broaden access
+- [x] Client Global ID manipulation
+- [x] Project Global ID manipulation
+- [x] Document Global ID manipulation
+- [x] source ID manipulation if exposed
+- [x] cross-tenant denial
+- [x] missing mapping cannot broaden access
 
 ## P4.4 Customer API safety
 
-- [ ] no unscoped internal data for Customer
-- [ ] customer-safe API only if mapping exists
-- [ ] otherwise preserve block and document owner decision
+- [x] no unscoped internal data for Customer
+- [x] customer-safe API only if mapping exists
+- [x] otherwise preserve block and document owner decision —
+      `bsystem-integration-core/docs/adr/ADR-005-customer-isolation-boundary.md`
 
 # P5 — HUB application foundation
 
