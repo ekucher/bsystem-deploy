@@ -49,11 +49,8 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_POSTGRESQL__USER: bsystem
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
-      AUTHENTIK_REDIS__HOST: redis
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     ports:
       - "9000:9000"
@@ -67,8 +64,6 @@ services:
     environment: *authentik_env
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks: [data]
 
