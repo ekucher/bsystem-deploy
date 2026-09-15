@@ -85,6 +85,8 @@ services:
       ESPOCRM_API_KEY: ${ESPOCRM_API_KEY:-}
       REDMINE_URL: ${REDMINE_URL:-}
       REDMINE_API_KEY: ${REDMINE_API_KEY:-}
+      OUTLINE_URL: ${OUTLINE_URL:-}
+      OUTLINE_API_KEY: ${OUTLINE_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
