@@ -1597,17 +1597,52 @@ Depends on: P22, P23, P25
 Goal: a green repository must not silently depend on an incompatible sibling
 `main`.
 
-- [ ] define the provider/consumer compatibility matrix for Integration Core,
+- [x] define the provider/consumer compatibility matrix for Integration Core,
       Deploy, HUB and Design System
-- [ ] run cross-repo checks against sibling `main` for pull requests where
+      — `docs/COMPATIBILITY.md`, which names each pairing and what holds it,
+      including the one held by nothing
+- [x] run cross-repo checks against sibling `main` for pull requests where
       practical
-- [ ] validate Integration Core + Deploy E2E together
-- [ ] validate HUB against the normalized API/OpenAPI contract
-- [ ] validate Design System package consumer build without consuming an
+      — the E2E job here and the contract job in HUB both resolve a matching
+      sibling branch where one exists and fall back to `main` where none does
+- [x] validate Integration Core + Deploy E2E together
+      — already covered by the `Autonomous E2E` job, which checks out Core,
+      builds the stack from that source and runs the scenario suite against it.
+      Recorded rather than rebuilt: this is the pairing with the most at stake
+      and it is validated in the real runtime, not against a description of it
+- [x] validate HUB against the normalized API/OpenAPI contract
+      — `hub#6`. The HUB's tests answer every request from a fake, which is the
+      right tool for testing the HUB and the wrong one for deciding whether the
+      platform serves a path: a fake answers a request for an endpoint that has
+      never existed. A path renamed in the platform left that repository green
+      and the failure waited for a browser
+- [!] validate Design System package consumer build without consuming an
       unversioned `main`
-- [ ] make fallback-to-main behavior explicit and fail loudly when a requested
+      — nothing consumes the Design System. The HUB declares no dependency on
+      it and imports neither its tokens nor its components, so the rule against
+      consuming an unversioned `main` is satisfied in the only way it currently
+      can be, and there is no consumer build to validate. Inventing a consumer
+      to produce a green check would report a compatibility that nothing
+      depends on. This needs an owner decision — whether the HUB should adopt
+      the Design System — rather than more automation
+- [x] make fallback-to-main behavior explicit and fail loudly when a requested
       sibling ref is missing in CI
-- [ ] produce a compact compatibility manifest/report as a CI artifact
+      — the fallback was already logged, but a line in a long log is not a
+      record. The run summary now names the Core ref and why it was chosen. As
+      for failing loudly: failing whenever no paired branch exists would break
+      every ordinary pull request, so it has to mean a ref asked for by hand.
+      `workflow_dispatch` takes a `core_ref` input, and a value that cannot be
+      resolved fails rather than validating against `main` and reporting it as
+      the requested pair. HUB's gate draws the line once more: with Core absent
+      entirely it fails, because a gate that passes when its provider is
+      missing disappears exactly when CI is misconfigured
+- [x] produce a compact compatibility manifest/report as a CI artifact
+      — `scripts/compatibility-manifest.py`, published as `compatibility.json`.
+      A green E2E run is a statement about a pair of commits and did not say
+      which pair; a stale provider and the intended one looked identical from
+      outside. The Core commit is read from the checkout the job is about to
+      use, not from an environment variable, because the variable records what
+      was asked for rather than what was resolved
 
 Definition of Done:
 - a breaking provider change is detected before a consumer merge where the

@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # A ref asked for by hand is a claim that it exists. Falling back to main
+  # would validate a pair nobody asked for and report it as the requested one,
+  # so a core_ref that cannot be resolved fails the job.
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: "Integration Core branch, tag or SHA to validate against. Fails if it does not exist."
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -203,17 +212,37 @@ jobs:
       # A branch in the Integration Core with the same name as this one is
       # used when it exists, so a change spanning both repositories can be
       # validated before either side merges.
+      # Which pair is being validated, decided here and recorded where somebody
+      # will see it. The fallback was already logged, but a line in a long log
+      # is not a record: nothing said which Integration Core commit a green run
+      # was green against, so a stale provider and a validated one looked the
+      # same from the outside.
       - name: Resolve the Integration Core branch
         id: core-ref
+        env:
+          REQUESTED: ${{ inputs.core_ref }}
         run: |
-          ref="${{ github.head_ref || github.ref_name }}"
-          if git ls-remote --exit-code --heads https://github.com/ekucher/bsystem-integration-core "$ref" >/dev/null 2>&1; then
-            echo "Using matching bsystem-integration-core branch: $ref"
+          remote=https://github.com/ekucher/bsystem-integration-core
+          if [ -n "$REQUESTED" ]; then
+            # Asked for by hand, so it is a claim rather than a guess.
+            if ! git ls-remote --exit-code "$remote" "$REQUESTED" >/dev/null 2>&1; then
+              echo "::error::Integration Core has no ref '$REQUESTED'. It was requested explicitly, so this run fails rather than silently validating against main."
+              exit 1
+            fi
+            ref="$REQUESTED"
+            reason="requested explicitly"
           else
-            echo "No matching bsystem-integration-core branch; using main"
-            ref=main
+            ref="${{ github.head_ref || github.ref_name }}"
+            if git ls-remote --exit-code --heads "$remote" "$ref" >/dev/null 2>&1; then
+              reason="matching branch"
+            else
+              ref=main
+              reason="no matching branch, fell back to main"
+            fi
           fi
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          echo "Integration Core ref: \`$ref\` ($reason)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Checkout Integration Core
         uses: actions/checkout@v7
@@ -221,6 +250,24 @@ jobs:
           repository: ekucher/bsystem-integration-core
           ref: ${{ steps.core-ref.outputs.ref }}
           path: bsystem-integration-core
+
+      # A green E2E run is a statement about a pair of commits, and until now it
+      # did not say which pair. The manifest is the artefact that answers "what
+      # was actually validated" after the logs have scrolled by, and it is the
+      # compatibility record P26 asks for.
+      - name: Record the validated pair
+        run: python3 scripts/compatibility-manifest.py > compatibility.json
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          CORE_REF: ${{ steps.core-ref.outputs.ref }}
+          CORE_REASON: ${{ steps.core-ref.outputs.reason }}
+
+      - name: Publish the compatibility manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-manifest
+          path: compatibility.json
+          retention-days: 90
 
       - name: Setup Go
         uses: actions/setup-go@v5
