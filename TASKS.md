@@ -64,6 +64,25 @@ those findings, because after the squash nothing in the repository reached the
 commit they referenced. An allowlist nobody can justify is how a real finding
 gets suppressed later.
 
+After P17, work continued on the properties the backlog assumed rather than
+proved. A PostgreSQL was installed in the working environment, which changed the
+method: these tests were run for real before being pushed, instead of being
+pushed for CI to try first.
+
+| Repository | Pull request | Merge commit | What it landed |
+| --- | --- | --- | --- |
+| `bsystem-deploy` | #5 | `7821ef7` | this delivery record |
+| `bsystem-integration-core` | #5 | `e64612a` | the store layer, RBAC and scope grants, Global ID immutability, the audit trail, the mapping audit's own queries, and the tenant isolation matrix, all executed against a real PostgreSQL |
+| `bsystem-deploy` | #6 | `366f835` | the correction those tests produced |
+
+`bsystem-deploy#6` is worth reading as a result rather than a fix. Two P17
+artefacts of mine — `docs/STAGE-ACCEPTANCE.md` and both smoke runners — described
+an unconfigured adapter as answering with an empty collection. It answers `503
+upstream_unavailable`. A stage deployment that deliberately left an integration
+out, which the same document invites, would have been reported as failing by a
+runner watching a platform behave correctly. The handler-level test found it by
+failing; nothing in review had.
+
 The 14 `[!]` items are unaffected and remain the only work left in this backlog.
 
 # P1 — Autonomous E2E test environment
