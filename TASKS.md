@@ -19,6 +19,32 @@ Legend:
 [!] BLOCKED
 ```
 
+## Delivery status
+
+P1-P16 are delivered and merged to `main` in all four repositories, 2026-09-16.
+
+An item marked `[x]` below is merged, not merely implemented locally. The merge
+commit that landed it is listed here, and both `CI` and `Security` are green on
+`main` at that commit.
+
+Three `[ ]` items inside P1-P16 are deliberately not done rather than pending;
+each carries its reason inline (E2E does not stack the static SPA, no Read Only
+role exists, and the integration health summary would require widening the
+machine boundary). They are not scheduled work.
+
+| Repository | Pull request | Merge commit |
+| --- | --- | --- |
+| `bsystem-integration-core` | #3 | `b23dc4d` |
+| `bsystem-deploy` | #2 | `db80ba2` |
+| `bsystem-hub` | #3 | `b534182` |
+| `bsystem-design-system` | #3 | `7e19afa` |
+
+Merged in that order: `bsystem-integration-core` before `bsystem-deploy`, because
+each repository's `Autonomous E2E` job resolves the other's branch by name and
+falls back to `main`.
+
+The 14 `[!]` items are unaffected and remain the only work left in this backlog.
+
 # P1 — Autonomous E2E test environment
 
 Priority: CRITICAL
