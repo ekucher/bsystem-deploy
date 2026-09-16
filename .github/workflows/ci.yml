@@ -229,6 +229,12 @@ jobs:
       - name: Run E2E scenarios
         working-directory: e2e
         env:
+          # The scenarios skip when no stack is configured, so that
+          # `go test ./...` stays safe on a developer's machine. A skipped Go
+          # test exits zero, so here — where the stack is up and the whole
+          # point of the job is to exercise it — a missing E2E_BASE_URL must
+          # fail rather than pass silently.
+          E2E_REQUIRED: "1"
           E2E_BASE_URL: http://127.0.0.1:8080
           E2E_IDENTITY_URL: http://127.0.0.1:9000
           E2E_ESPOCRM_URL: http://127.0.0.1:8090

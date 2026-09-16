@@ -80,11 +80,19 @@ normalizes.
 The scenarios skip themselves when `E2E_BASE_URL` is unset, so `go test ./...`
 is safe on a machine with no stack running.
 
+That convenience has a sharp edge: a skipped Go test exits zero. Where the
+stack is up and running it is the whole point — CI — a missing `E2E_BASE_URL`
+would skip every scenario and report success, and the check would go green
+having verified nothing. So CI sets `E2E_REQUIRED=1`, which turns a missing
+stack from a skip into a refusal to start. Set it anywhere else the suite is
+expected to actually run.
+
 ## Harness configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `E2E_BASE_URL` | none — unset skips every scenario | Integration Core |
+| `E2E_REQUIRED` | unset — scenarios may skip | Set to any value where a skip must be a failure instead |
+| `E2E_BASE_URL` | none — unset skips every scenario, unless `E2E_REQUIRED` is set | Integration Core |
 | `E2E_IDENTITY_URL` | `http://127.0.0.1:9000` | identity mock |
 | `E2E_ESPOCRM_URL` | `http://127.0.0.1:8090` | CRM mock control plane |
 | `E2E_REDMINE_URL` | `http://127.0.0.1:8091` | Redmine mock control plane |
