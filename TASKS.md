@@ -83,6 +83,38 @@ out, which the same document invites, would have been reported as failing by a
 runner watching a platform behave correctly. The handler-level test found it by
 failing; nothing in review had.
 
+The same method continued past that point, and kept producing the same kind of
+result: a property the codebase asserts somewhere and proves nowhere, a test
+written for it, and the test correcting the hypothesis rather than confirming
+it.
+
+| Repository | Pull request | Merge commit | What it landed |
+| --- | --- | --- | --- |
+| `bsystem-integration-core` | #6 | `066613a` | an unconfigured integration answered "does not support this capability"; the status is now checked before the capability |
+| `bsystem-hub` | #4 | `420d8a8` | the HUB rendered that same 503 as a bare "Помилка"; three 503s are now told apart, because the reader's next step differs for each |
+| `bsystem-hub` | #5 | `e7ed340` | the authorization code stayed in the URL when the exchange failed; the strip moved into a `finally` |
+| `bsystem-design-system` | #4 | `03fb5d7` | two dark-theme button labels measured below WCAG AA; the fill became its own token, and contrast is now measured from `tokens.css` directly |
+| `bsystem-hub` | #2, #1 | `a5cd6aa`, `0bbc881` | `actions/checkout` and `actions/setup-node` 4 → 7 |
+| `bsystem-integration-core` | #7 | `6d37af3` | `bsystem_database_pool_acquires_total` was published as a gauge; the registry gained `CounterFunc`, and `/metrics` now has a contract test |
+| `bsystem-deploy` | #8 | `2fea7b8` | how to read an empty Grafana panel, which is the dashboard's most misleading output |
+| `bsystem-deploy` | #9 | `3f43534` | a skipped E2E suite reported success; `E2E_REQUIRED=1` in CI now makes a skip a failure |
+| `bsystem-deploy` | #10 | `356c392` | Redis removed: nothing ever talked to it, and three documents had come to describe its volume as authentik's cache |
+| `bsystem-integration-core` | #8 | `469feed` | the architectural reservation for Redis stands; what changes is that the first feature to need one adds the service with the use |
+
+Two of those are worth reading as results rather than fixes.
+
+`bsystem-deploy#9`: `TestMain` lived in `required.go`, not a `_test.go` file, so
+the testing framework never called it. The guard meant to make a skipped suite
+fail had itself been skipped since it was written. Running it for real is what
+said so; nothing in review had.
+
+`bsystem-deploy#10`: the Redis service was provisioned in P0 and never used. A
+running container nothing talks to is worse than no container, and this
+deployment demonstrated why — `SECURITY.md`, `docs/DEPLOYMENT.md` and
+`docs/BACKUP-RESTORE.md` all came to describe it as authentik's cache and task
+broker, which it never was. authentik was configured against PostgreSQL alone,
+and the Integration Core never read `REDIS_URL`.
+
 The 14 `[!]` items are unaffected and remain the only work left in this backlog.
 
 # P1 — Autonomous E2E test environment
