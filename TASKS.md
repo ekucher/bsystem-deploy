@@ -442,15 +442,31 @@ see `bsystem-integration-core/docs/NOTIFICATIONS.md`.
 
 Priority: MEDIUM
 
-- [-] normalized searchable entity
-- [-] type/title/summary/source/tenant/permissions/timestamp
-- [-] provider abstraction
-- [-] in-memory test provider
-- [-] OpenSearch adapter skeleton
-- [-] `GET /api/v1/search`
-- [-] query/type filter/pagination
-- [-] authorization filtering
-- [-] index/update/delete event contracts
+- [x] normalized searchable entity — carries no upstream payload; title and
+      summary are the only text
+- [x] type/title/summary/source/tenant/permissions/timestamp — plus the scope
+      a grant would be written against, which is what makes a confined
+      principal decidable
+- [x] provider abstraction — `Name`/`Index`/`Delete`/`Search`, upsert and
+      idempotent delete
+- [x] in-memory test provider — the default, so search is always answerable
+- [x] OpenSearch adapter skeleton — shapes, bulk NDJSON framing, error
+      normalization and resilience, contract-tested against a fake cluster.
+      Index mappings and lifecycle are absent: they depend on cluster
+      decisions nobody has made, and nothing has run against a real cluster
+- [x] `GET /api/v1/search`
+- [x] query/type filter/pagination — offset cursors, because relevance has no
+      stable key to resume from
+- [x] authorization filtering — every candidate evaluated individually against
+      the document's own scope; the provider's narrowing is an optimisation,
+      not the decision
+- [x] index/update/delete event contracts — `POST`/`DELETE
+      /api/service/v1/search/documents`, with the event-to-operation mapping
+      documented for an indexer
+
+The search envelope carries no total: the count of matches before
+authorization would tell a caller how many records exist that they may not
+read. See `bsystem-integration-core/docs/SEARCH.md`.
 
 # P11 — Operations foundation
 
