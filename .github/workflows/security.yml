@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [mocks, e2e]
+        module: [mocks, e2e, loadtest]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -55,6 +55,30 @@ jobs:
       - name: Run govulncheck
         working-directory: ${{ matrix.module }}
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  staticcheck:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [mocks, e2e, loadtest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache: false
+
+      # Integration Core has run staticcheck since it had CI. This repository's
+      # Go — the mock upstreams, the E2E harness, the load harness — had
+      # govulncheck and nothing else, so a dependency with a published advisory
+      # was caught and a use-after-close was not.
+      - name: Run staticcheck
+        working-directory: ${{ matrix.module }}
+        run: go run honnef.co/go/tools/cmd/staticcheck@latest ./...
 
   configuration:
     name: Compose and Dockerfile misconfiguration
