@@ -456,17 +456,17 @@ Priority: MEDIUM
 
 Priority: MEDIUM
 
-- [ ] Server model
-- [ ] HealthEvent
-- [ ] BackupEvent
-- [ ] MaintenanceEvent
-- [ ] `SRV-*`
-- [ ] relation to `CL-*` and optional `PR-*`
-- [ ] `/api/v1/servers`
-- [ ] `/api/v1/servers/{id}`
-- [ ] `/api/v1/operations/events`
-- [ ] mock provider
-- [ ] BRAVO event contracts
+- [-] Server model
+- [-] HealthEvent
+- [-] BackupEvent
+- [-] MaintenanceEvent
+- [-] `SRV-*`
+- [-] relation to `CL-*` and optional `PR-*`
+- [-] `/api/v1/servers`
+- [-] `/api/v1/servers/{id}`
+- [-] `/api/v1/operations/events`
+- [-] mock provider
+- [-] BRAVO event contracts
 
 Events:
 
