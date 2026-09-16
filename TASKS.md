@@ -1555,8 +1555,28 @@ Automate checks for facts that currently exist in more than one place:
       note and pass, which is the vacuous green this wave keeps finding
 - [x] metric names/types documented vs emitted
       — already closed by the metrics contract test in Integration Core
-- [ ] adapter capability names vs registry/implementation/docs
-- [ ] route names/endpoints in docs vs OpenAPI
+- [x] adapter capability names vs registry/implementation/docs
+      — `core#15`. The capability list is written twice, once in the adapter and
+      once beside `disabledAdapter`, and nothing made them agree. A capability
+      added to one and not the other makes the platform answer a different
+      question depending on whether the integration happens to be configured:
+      a caller reading `/adapters` on a deployment without Outline would be
+      told the product cannot search documents, which is a statement about that
+      deployment dressed as a statement about the product. The E2E stack cannot
+      catch it — it configures every adapter, so it only ever sees the real
+      lists — and the partial-deployment scenario reads the placeholder but
+      asserts its status, not its capabilities
+- [x] route names/endpoints in docs vs OpenAPI
+      — `scripts/check-documented-endpoints.py`. An endpoint named in a runbook
+      is followed by somebody at a keyboard, and a 404 from a documented path
+      reads as a broken deployment rather than a stale document. Two shapes are
+      deliberately not endpoints and would otherwise dominate the findings: a
+      version prefix written as a rule (`/api/v1/*`), which is policy rather
+      than a path, and an upstream's own path (`/api/v1/Account`), which
+      belongs to EspoCRM. Only the second needs a list, because only it is
+      indistinguishable by shape. Integration Core's own documentation is
+      checked by Integration Core's CI: this repository is not the place to
+      make another repository's docs fail
 - [x] documented file/script paths exist
       — already closed by `scripts/check-doc-links.py`
 - [ ] stale references to removed services/dependencies fail CI

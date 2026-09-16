@@ -249,6 +249,15 @@ jobs:
       - name: Check the Global ID prefixes agree with the platform's seed
         run: python3 scripts/check-global-ids.py
 
+      # Same placement and the same reason: the specification lives in the
+      # Integration Core, so this comparison exists only where Core is checked
+      # out. Core's own documentation is checked by Core's CI — this repository
+      # is not the place to make another repository's docs fail.
+      - name: Check the documented endpoints exist
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check-documented-endpoints.py
+
       # Here the Integration Core is checked out beside this repository, so the
       # script also compares the platform's RBAC seed — the list that actually
       # decides which role a group grants.

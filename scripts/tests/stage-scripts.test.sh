@@ -406,6 +406,48 @@ if contains "$nobind_output" "proves nothing"; then
 else
   bad "the missing-bind failure is unclear: $nobind_output"
 fi
+# --- documented endpoints exist ----------------------------------------------
+#
+# An endpoint named in a runbook is followed by somebody at a keyboard. A 404
+# from a documented path reads as a broken deployment rather than a stale
+# document, so the next twenty minutes go into the deployment.
+
+EP_WORK="$WORK/endpoints/bsystem-deploy"
+mkdir -p "$EP_WORK/scripts" "$EP_WORK/docs"
+cp scripts/check-documented-endpoints.py "$EP_WORK/scripts/"
+ln -sfn "$(cd ../bsystem-integration-core 2>/dev/null && pwd)" "$WORK/endpoints/bsystem-integration-core" 2>/dev/null || true
+
+if [ -f ../bsystem-integration-core/docs/openapi.yaml ]; then
+  if python3 scripts/check-documented-endpoints.py >/dev/null 2>&1; then
+    ok "every documented endpoint exists in the OpenAPI specification"
+  else
+    bad "a documented endpoint does not exist: $(python3 scripts/check-documented-endpoints.py 2>&1)"
+  fi
+
+  printf 'Check `/api/v1/clientss` to list them.\n' > "$EP_WORK/docs/fake.md"
+  ep_output="$(cd "$EP_WORK" && python3 scripts/check-documented-endpoints.py 2>&1)"
+  check "$?" "1" "a documented endpoint the platform does not serve is caught"
+  if contains "$ep_output" "/api/v1/clientss"; then
+    ok "the endpoint failure names the endpoint"
+  else
+    bad "the endpoint failure does not name the endpoint: $ep_output"
+  fi
+
+  # The two shapes that are not endpoints and would otherwise dominate: the
+  # versioning rule, and an upstream's own path.
+  printf 'Read `/api/v1/clients`. All human routes live under `/api/v1/*`.\n' > "$EP_WORK/docs/fake.md"
+  (cd "$EP_WORK" && python3 scripts/check-documented-endpoints.py >/dev/null 2>&1)
+  check "$?" "0" "a version prefix written as a rule is not mistaken for an endpoint"
+
+  printf 'Read `/api/v1/clients`. The adapter requests `/api/v1/Account` from EspoCRM.\n' > "$EP_WORK/docs/fake.md"
+  (cd "$EP_WORK" && python3 scripts/check-documented-endpoints.py >/dev/null 2>&1)
+  check "$?" "0" "an upstream path is not mistaken for a platform endpoint"
+
+  rm -f "$EP_WORK/docs/fake.md"
+else
+  ok "Integration Core is not checked out; the documented endpoint comparison is skipped"
+fi
+
 # --- Global ID prefixes agree with the platform's seed -----------------------
 #
 # A prefix documented but never seeded allocates nothing: the request fails
