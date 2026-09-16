@@ -1148,13 +1148,50 @@ Depends on: P19
 ## P20.1 Concurrency
 
 - [x] run and expand `go test -race ./...`
-- [ ] concurrent `EnsureIdentity`
-- [ ] concurrent `EnsureServiceIdentity`
+- [x] concurrent `EnsureIdentity`
+      — one user, and exactly one caller told it was the first. The `created`
+      flag matters as much as the Global ID: it is what drives everything that
+      happens on first sight, so two callers both told they created the
+      identity would each do that work, and the second would look like a
+      legitimate first sighting
+- [x] concurrent `EnsureServiceIdentity`
+      — this one found a real defect. There was no advisory lock:
+      `SELECT ... FOR UPDATE` locks a row, and on a first sighting there is no
+      row to lock, so every concurrent transaction saw nothing, every one
+      bumped the counter, and twelve simultaneous registrations produced three
+      distinct Global IDs for one service. The upsert then let the last writer
+      win, so the earlier callers walked away holding identifiers the platform
+      does not recognise — each of them told `created=true`. `EnsureIdentity`
+      had taken `pg_advisory_xact_lock` all along with a comment saying why;
+      the machine path beside it did not, and nothing compared the two. For
+      service identities this is the normal case: an integration starting
+      several replicas registers from all of them at once
 - [x] concurrent Global ID allocation and source mapping
-- [ ] concurrent scope grant/revoke/read
-- [ ] concurrent audit writes
-- [ ] adapter registry/readiness concurrency
-- [ ] shutdown while requests and DB work are in flight
+- [x] concurrent scope grant/revoke/read
+      — identical grants converge on one row, and a grant racing a revoke ends
+      in one of the two states somebody asked for rather than a third
+- [x] concurrent audit writes
+      — all survive. An audit trail that drops an entry under load is worse
+      than none, because it is trusted anyway
+- [x] adapter registry/readiness concurrency
+      — and the first version of this test was worthless. `Registry.Health`
+      says it holds the lock only long enough to snapshot, because holding it
+      across a network call would block every other reader; I asserted exactly
+      that, and the test still passed when the probe was moved inside the lock.
+      It is a *read* lock, and readers do not exclude each other. What blocks is
+      a writer: `Register` waits for the read lock to clear, and Go's
+      `RWMutex` then queues every later reader behind it — so one stalled
+      upstream stalls registration and through it `/adapters`, `/readyz` and
+      every handler that resolves an adapter. The assertion is on `Register`
+      now, and the same mutation fails
+- [x] shutdown while requests and DB work are in flight
+      — the behaviour lived in the tail of `main` and could not be called at
+      all, so it is `serveUntilSignal` now. A request that arrived before
+      SIGTERM must finish rather than be dropped: that is what a rolling deploy
+      does to every instance several times, and the failure is invisible on a
+      healthy platform — users who did nothing but arrive at the wrong moment
+      get an error that reads as an intermittent platform fault rather than as
+      a deployment, so the deploy is the last place anybody looks
 
 ## P20.2 Database correctness
 
@@ -1163,11 +1200,34 @@ Depends on: P19
       alone
 - [x] test rollback on partial failures
 - [x] test concurrent startup/migration behavior
-- [ ] migration-from-zero plus upgrade from every practical historical schema
+- [x] migration-from-zero plus upgrade from every practical historical schema
       level represented by the repository
-- [ ] inspect indexes against actual lookup/order/filter paths
-- [ ] identify N+1 queries and repeated transactions not already covered by P16
-- [ ] document query-plan evidence when an index is added or rejected
+      — every deployment that exists is at *some* level, and an upgrade has to
+      work from each; the empty database is the one case CI exercises and the
+      one case no real deployment is ever in. The levels are derived from the
+      migrations directory, so a new file is covered without anybody
+      remembering. Verified by mutation: one `CREATE TABLE IF NOT EXISTS`
+      turned into a plain `CREATE` fails from that level onwards, which is
+      exactly the defect — a non-idempotent migration works on an empty
+      database and breaks every upgrade
+- [x] inspect indexes against actual lookup/order/filter paths
+      — already done by `009_indexes.sql`, which was written by reading every
+      query rather than by adding indexes that sound useful, and which records
+      the candidates it rejected
+- [x] identify N+1 queries and repeated transactions not already covered by P16
+      — and my first test for it was worthless. It watched the Global ID
+      counter: if the per-record path ran for already-mapped records it would
+      allocate. It passed — and kept passing when the batched read was disabled
+      entirely, because that path re-reads before allocating, finds the row,
+      and never touches the counter. The counter detects re-allocation, not an
+      N+1. It counts scans of `global_entities` now, and the same mutation says
+      twenty-five scans where one is correct
+- [x] document query-plan evidence when an index is added or rejected
+      — `009_indexes.sql` held the reasoning, which is not evidence. The
+      evidence is a test that seeds enough rows for the planner to have a
+      choice and asserts the index is chosen. Seeding is the point: on an empty
+      table PostgreSQL prefers a sequential scan whatever indexes exist, so a
+      plan taken against an empty database proves nothing at all
 
 `core#12` landed the first of these. The constraint did close the race — no
 duplicate Global ID was ever minted — but the application path did not handle
