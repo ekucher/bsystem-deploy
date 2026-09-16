@@ -22,6 +22,6 @@ fixed while writing this, say so — that is the most useful line in the PR. -->
 
 <!-- Delete any that do not apply, and say why in a line. -->
 
-- [ ] `docs/openapi.yaml` matches the routes served
+- [ ] `bsystem-integration-core/docs/openapi.yaml` matches the routes served
 - [ ] Migrations are additive, with no dropped column or table
 - [ ] The E2E stack was run for changes that touch a database query

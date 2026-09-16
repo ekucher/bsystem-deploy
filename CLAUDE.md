@@ -331,7 +331,7 @@ Version APIs:
 /api/service/v1/*
 ```
 
-Keep human and machine APIs separate. Keep `docs/openapi.yaml` aligned with implementation.
+Keep human and machine APIs separate. Keep `bsystem-integration-core/docs/openapi.yaml` aligned with implementation.
 
 ## Database policy
 

@@ -100,6 +100,78 @@ jobs:
           INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
         run: docker compose -f docker-compose.e2e.yml config --quiet
 
+      - name: Validate the stage Compose overlay
+        run: docker compose -f docker-compose.yml -f docker-compose.stage.yml config --quiet
+
+      # The overlay is checked as part of the stack it modifies: on its own
+      # it is not a complete Compose file, and checking it alone would pass
+      # vacuously.
+      - name: Check stage container hardening
+        run: python3 scripts/check-hardening.py "docker-compose.yml+docker-compose.stage.yml"
+
+  stage-assets:
+    name: Stage assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check shell scripts parse
+        run: |
+          status=0
+          while IFS= read -r script; do
+            if bash -n "$script"; then
+              echo "ok      $script"
+            else
+              echo "::error file=$script::this script does not parse"
+              status=1
+            fi
+          done < <(find scripts -name '*.sh' -type f | sort)
+          exit "$status"
+
+      - name: Lint shell scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # SC1091: sourced files are not present at lint time.
+          # SC2317: reachability analysis misreads trap-invoked cleanup.
+          shellcheck --severity=warning --exclude=SC1091,SC2317 \
+            scripts/stage-preflight.sh scripts/stage-smoke.sh scripts/release-manifest.sh
+
+      - name: Check PowerShell scripts parse
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($script in Get-ChildItem -Path scripts -Filter *.ps1 -Recurse) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors -and $errors.Count -gt 0) {
+              Write-Host "::error file=$($script.FullName)::$($errors[0].Message)"
+              $failed = $true
+            } else {
+              Write-Host "ok      $($script.Name)"
+            }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Run the stage script tests
+        run: bash scripts/tests/stage-scripts.test.sh
+
+      - name: Check the release manifest generates
+        run: |
+          ./scripts/release-manifest.sh > /tmp/release-manifest.json
+          python3 -c "import json; json.load(open('/tmp/release-manifest.json'))"
+          echo "the release manifest is valid JSON"
+
+      # A stage file is exactly the kind of file a real value gets pasted into
+      # "just to test something". gitleaks covers the repository; this is the
+      # narrower check that the stage assets themselves stay free of values
+      # that look like configuration someone forgot to remove.
+      - name: Check stage assets carry no secret-like value
+        run: python3 scripts/check-stage-secrets.py
+
+      - name: Check acceptance docs reference paths that exist
+        run: python3 scripts/check-doc-links.py
+
   e2e:
     name: Autonomous E2E
     runs-on: ubuntu-latest
