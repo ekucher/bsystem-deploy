@@ -172,6 +172,13 @@ jobs:
       - name: Check acceptance docs reference paths that exist
         run: python3 scripts/check-doc-links.py
 
+      # The Integration Core is not checked out in this job, so the script
+      # compares the two lists this repository owns and says so. The third —
+      # the platform's own RBAC seed — is compared in the E2E job, which has
+      # the sibling checkout.
+      - name: Check the BSYSTEM group names agree
+        run: python3 scripts/check-identity-groups.py
+
   e2e:
     name: Autonomous E2E
     runs-on: ubuntu-latest
@@ -220,6 +227,12 @@ jobs:
       - name: Vet
         working-directory: e2e
         run: go vet ./...
+
+      # Here the Integration Core is checked out beside this repository, so the
+      # script also compares the platform's RBAC seed — the list that actually
+      # decides which role a group grants.
+      - name: Check the BSYSTEM group names agree with the platform's seed
+        run: python3 scripts/check-identity-groups.py
 
       - name: Start the E2E stack
         env:
