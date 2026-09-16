@@ -589,40 +589,54 @@ No real LLM credentials required.
 
 ## P13.1 Providers
 
-- [-] generic provider interface
-- [-] fake provider
-- [-] Ollama client
-- [-] OpenAI client with env-only config
-- [-] no committed secrets
+- [x] generic provider interface — `Name`/`Model`/`Complete`
+- [x] fake provider — the default, so the gateway is exercised everywhere
+- [x] Ollama client — local; the prompt does not leave the deployment
+- [x] OpenAI client with env-only config — endpoint, key and model all
+      required, no defaults; a misconfigured provider falls back to the fake
+      rather than failing open
+- [x] no committed secrets — the redactor's own test fixtures are assembled at
+      run time, after the platform's secret scanner correctly flagged them
 
 ## P13.2 Authorization-aware context
 
-- [-] actor identity
-- [-] Integration Core authorization
-- [-] explicit sources
-- [-] explicit Global IDs
-- [-] no unrestricted SQL
+- [x] actor identity
+- [x] Integration Core authorization — each source uses exactly the permission
+      and scope its own read endpoint uses, asserted against the route
+      inventory
+- [x] explicit sources — a source the caller may not use is refused, not
+      dropped
+- [x] explicit Global IDs — no search, no inference, no related records
+- [x] no unrestricted SQL
 
 ## P13.3 Classification and redaction
 
-- [-] PUBLIC/INTERNAL/CONFIDENTIAL/SECRET/CREDENTIAL policy
-- [-] block `CREDENTIAL`
-- [-] Authorization/token/password/API-key redaction
-- [-] tests proving credentials never reach provider payload
+- [x] PUBLIC/INTERNAL/CONFIDENTIAL/SECRET/CREDENTIAL policy
+- [x] block `CREDENTIAL` — refused outright rather than redacted
+- [x] Authorization/token/password/API-key redaction — keyed values, pasted
+      secrets recognised by shape, and PEM blocks removed whole
+- [x] tests proving credentials never reach provider payload — asserted
+      against the payload the provider actually received, not the redactor in
+      isolation
 
 ## P13.4 AI audit/API
 
-- [-] actor
-- [-] provider/model
-- [-] requested sources
-- [-] entities
-- [-] classification summary
-- [-] request ID/result
-- [-] no full sensitive prompts by default
-- [-] internal AI endpoint
-- [-] fake-provider E2E
-- [-] timeout/cancellation
-- [-] request size limits
+- [x] actor
+- [x] provider/model
+- [x] requested sources
+- [x] entities
+- [x] classification summary
+- [x] request ID/result
+- [x] no full sensitive prompts by default — no prompt is stored at all
+- [x] internal AI endpoint — `POST /api/v1/ai/ask`
+- [x] fake-provider E2E
+- [x] timeout/cancellation — bounded independently of the caller's deadline
+- [x] request size limits
+
+`ai.query` is granted to no role. Who may spend money on a model, and whose
+data may be put in front of one, is an owner decision; administrators reach it
+through the wildcard. See `bsystem-integration-core/docs/AI-GATEWAY.md` and
+`adr/ADR-010`.
 
 # P14 — Documentation and ADRs
 
