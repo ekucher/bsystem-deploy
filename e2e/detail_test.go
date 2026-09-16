@@ -281,3 +281,77 @@ func beyondAllocated(t *testing.T, items []entityView) string {
 	}
 	return fmt.Sprintf("%s-%0*d", prefix, width, highest+1)
 }
+
+// A source record that disappears after its Global ID was allocated leaves the
+// Global ID behind, and the read that finds nothing says so plainly.
+//
+// Global IDs are immutable and everything refers to them — audit rows, scope
+// grants, support relations. A record deleted upstream must therefore not take
+// its Global ID with it: the references held against it have to keep resolving
+// to something, or the platform loses the ability to say what an audit entry
+// was about.
+//
+// The other half is the answer. An upstream 404 arriving in the middle of a
+// detail read is the platform meeting a record that is gone, not the platform
+// breaking, so it must be normalized rather than surfaced as a failure. A 500
+// here would send an operator looking for a fault in BSYSTEM over something
+// that happened in EspoCRM.
+func TestASourceRecordDeletedAfterAllocationKeepsItsGlobalID(t *testing.T) {
+	harness := ready(t)
+
+	clients := collect(t, harness, "/api/v1/clients", TokenAdmin)
+	if len(clients) == 0 {
+		t.Fatal("no clients to work with; the rest of this test would prove nothing")
+	}
+	client := clients[0]
+	if client.ID == "" || client.SourceID == "" {
+		t.Fatalf("a client arrived without an identity: %+v", client)
+	}
+
+	// This one record is now gone upstream, and only this one. The mock
+	// matches a fault path exactly rather than by prefix, so the path has to
+	// be the detail path the adapter actually requests — injecting on the
+	// collection path would leave the detail read untouched and the test
+	// asserting against a platform that met no fault at all.
+	//
+	// Naming the single record is also what the scenario means. "Everything is
+	// down" is a different test, and this one is about a record that was
+	// deleted while the rest of the upstream kept working.
+	harness.InjectFault(t, harness.EspoCRM, "/api/v1/Account/"+client.SourceID, http.StatusNotFound, 0)
+
+	response := harness.API(t, http.MethodGet, "/api/v1/clients/"+client.ID, TokenAdmin, nil)
+	if response.Status == http.StatusInternalServerError {
+		t.Fatalf("a record deleted upstream answered 500; that sends an operator looking for a fault in this platform (body: %s)", truncate(response.Body))
+	}
+	if response.Status != http.StatusNotFound && response.Status != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want a normalized 404 or 503 (body: %s)", response.Status, truncate(response.Body))
+	}
+
+	var failure platformError
+	response.JSON(t, &failure)
+	if failure.Code == "" {
+		t.Error("the refusal carries no code; a caller is told to branch on one")
+	}
+	for _, leak := range []string{"SQLSTATE", "espocrm.invalid", "Bearer", "api_key", "127.0.0.1"} {
+		if strings.Contains(string(response.Body), leak) {
+			t.Errorf("the refusal carries %q: %s", leak, truncate(response.Body))
+		}
+	}
+
+	// The Global ID outlives the record. Reading the mapping directly is the
+	// question that matters: everything else in the platform refers to this id
+	// and has to keep resolving.
+	harness.ResetFaults(t, harness.EspoCRM)
+	mapping := harness.API(t, http.MethodGet, "/api/v1/global-ids/"+client.ID, TokenAdmin, nil)
+	if mapping.Status != http.StatusOK {
+		t.Fatalf("the Global ID stopped resolving after its source record was deleted: status = %d (body: %s)", mapping.Status, truncate(mapping.Body))
+	}
+	var entity struct {
+		GlobalID string `json:"global_id"`
+		SourceID string `json:"source_id"`
+	}
+	mapping.JSON(t, &entity)
+	if entity.GlobalID != client.ID || entity.SourceID != client.SourceID {
+		t.Errorf("the mapping changed: %+v, want %s/%s", entity, client.ID, client.SourceID)
+	}
+}
