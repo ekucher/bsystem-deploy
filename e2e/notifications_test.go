@@ -101,7 +101,11 @@ func TestMappedEventReachesItsAudienceAndNoOneElse(t *testing.T) {
 		{"DevOps holds the audience permission", TokenDevOps, true},
 		{"an administrator reads every audience", TokenAdmin, true},
 		{"QA does not hold it", TokenQA, false},
-		{"a developer does not hold it", TokenDeveloper, false},
+		// A developer does hold operations.server.read in the RBAC model, and
+		// so is in this audience. Stated as an expectation rather than
+		// removed, because it is the line that says who a backup failure
+		// reaches.
+		{"a developer holds it too", TokenDeveloper, true},
 		// A scope-confined principal reads only what names it, whatever its
 		// role permissions say. Its permissions mean "inside my own scope",
 		// and reading them as an audience would cross the tenant boundary.
