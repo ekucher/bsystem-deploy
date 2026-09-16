@@ -1,0 +1,122 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Vulnerability and misconfiguration databases change without the code
+    # changing, so a scheduled run is what catches a base image that became
+    # vulnerable overnight.
+    - cron: "41 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Gitleaks scans history, not just the working tree: a secret that
+          # was committed and then removed is still a leaked secret. This
+          # repository carries Compose files and environment templates, so it
+          # is the likeliest place for one to land.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  vulnerabilities:
+    name: Go vulnerabilities
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [mocks, e2e]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache: false
+
+      # The mocks are built into images that run in CI, and the harness runs
+      # in CI too, so both are code this repository ships rather than an
+      # incidental dependency.
+      - name: Run govulncheck
+        working-directory: ${{ matrix.module }}
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  configuration:
+    name: Compose and Dockerfile misconfiguration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Trivy's misconfiguration scanner covers the Dockerfiles here. It has
+      # no Docker Compose rules, so the Compose hardening is guarded instead
+      # by scripts/check-hardening.py in the CI workflow.
+      - name: Scan configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+
+      - name: Scan the filesystem
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+  images:
+    name: Mock image scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # One mock stands in for all four: they share a Dockerfile and a module,
+      # so the image contents differ only in which command was linked in.
+      - name: Build a mock image
+        working-directory: mocks
+        run: docker build --build-arg MOCK=mock-espocrm -t bsystem/mock:scan .
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: bsystem/mock:scan
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      # An SBOM is what makes the next advisory answerable without a re-scan:
+      # "were we shipping this package, and in which build?"
+      - name: Generate an SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: bsystem/mock:scan
+          format: cyclonedx
+          output: sbom.cyclonedx.json
+
+      - name: Publish the SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-mock-upstreams
+          path: sbom.cyclonedx.json
+          retention-days: 90

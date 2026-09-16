@@ -56,6 +56,22 @@ Local endpoints:
 
 Detailed runbook: [docs/RUN-P0.md](docs/RUN-P0.md).
 
+## Autonomous E2E stack
+
+`docker-compose.e2e.yml` brings up the platform against deterministic mock
+upstreams, so BSYSTEM can be validated end to end with no owner credentials and
+no production access:
+
+```bash
+docker compose -f docker-compose.e2e.yml up -d --build --wait
+(cd e2e && E2E_BASE_URL=http://127.0.0.1:8080 go test ./...)
+docker compose -f docker-compose.e2e.yml down -v
+```
+
+Every credential in that stack is a documented test-only placeholder. See
+[docs/E2E-ENVIRONMENT.md](docs/E2E-ENVIRONMENT.md) and
+[mocks/README.md](mocks/README.md).
+
 ## Deployment strategy
 
 Initial platform target:
@@ -122,4 +138,4 @@ Recommended split as the platform grows:
 - `ekucher/bsystem-integration-core`
 - `ekucher/bsystem-design-system`
 
-See [Architecture](docs/ARCHITECTURE.md), [P0 Foundation](docs/P0-FOUNDATION.md), [Run P0](docs/RUN-P0.md), and [Roadmap](docs/ROADMAP.md).
+See [Architecture](docs/ARCHITECTURE.md), [P0 Foundation](docs/P0-FOUNDATION.md), [Run P0](docs/RUN-P0.md), [E2E Environment](docs/E2E-ENVIRONMENT.md), and [Roadmap](docs/ROADMAP.md).

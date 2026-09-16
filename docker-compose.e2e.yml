@@ -1,0 +1,201 @@
+# BSYSTEM autonomous E2E stack.
+#
+# Brings up PostgreSQL, NATS, the four deterministic mock upstreams and the
+# Integration Core, with no dependency on authentik, EspoCRM, Redmine, Outline
+# or any owner credential. Every secret below is a test-only placeholder.
+#
+#   docker compose -f docker-compose.e2e.yml up -d --build --wait
+#   E2E_BASE_URL=http://127.0.0.1:8080 go test ./... -C e2e
+#   docker compose -f docker-compose.e2e.yml down -v
+#
+# INTEGRATION_CORE_CONTEXT points at the Integration Core checkout. It defaults
+# to the sibling clone described in CLAUDE.md.
+name: bsystem-e2e
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The postgres entrypoint starts as root and drops to the postgres user,
+    # so it keeps the capabilities that requires and nothing else. PGDATA is
+    # written, so the filesystem cannot be read-only.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    environment:
+      POSTGRES_USER: bsystem
+      POSTGRES_PASSWORD: e2e-test-postgres-password
+      POSTGRES_DB: postgres
+    volumes:
+      - ./postgres/e2e-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bsystem -d bsystem_integration"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    # Data stays on an internal network: the database is not reachable from
+    # outside the stack even though the harness talks to everything else.
+    networks: [e2e-data]
+
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The nats image already runs as an unprivileged user; JetStream writes to
+    # /data, so the filesystem stays writable.
+    cap_drop: [ALL]
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    ports:
+      # Published so the E2E harness can subscribe and assert on published
+      # platform events.
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+    networks: [e2e-edge]
+
+  mock-identity:
+    build:
+      context: ./mocks
+      args:
+        MOCK: mock-identity
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":9000"
+      IDENTITY_ISSUER: http://mock-identity:9000/application/o/bsystem-hub/
+    healthcheck:
+      test: ["CMD", "/mock", "-healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:9000:9000"
+    networks: [e2e-edge]
+
+  mock-espocrm:
+    build:
+      context: ./mocks
+      args:
+        MOCK: mock-espocrm
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":8090"
+      ESPOCRM_API_KEY: test-espocrm-api-key
+    healthcheck:
+      test: ["CMD", "/mock", "-healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      # Published so the harness can drive the fault control plane.
+      - "127.0.0.1:8090:8090"
+    networks: [e2e-edge]
+
+  mock-redmine:
+    build:
+      context: ./mocks
+      args:
+        MOCK: mock-redmine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":8091"
+      REDMINE_API_KEY: test-redmine-api-key
+    healthcheck:
+      test: ["CMD", "/mock", "-healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:8091:8091"
+    networks: [e2e-edge]
+
+  mock-outline:
+    build:
+      context: ./mocks
+      args:
+        MOCK: mock-outline
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":8092"
+      OUTLINE_API_KEY: test-outline-api-key
+    healthcheck:
+      test: ["CMD", "/mock", "-healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "127.0.0.1:8092:8092"
+    networks: [e2e-edge]
+
+  integration-core:
+    build:
+      context: ${INTEGRATION_CORE_CONTEXT:-../bsystem-integration-core}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # The server runs as a non-root user from the image and writes nothing to
+    # disk: logs go to stdout and every cache is in memory.
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://bsystem:e2e-test-postgres-password@postgres:5432/bsystem_integration?sslmode=disable
+      NATS_URL: nats://nats:4222
+      AUTHENTIK_USERINFO_URL: http://mock-identity:9000/application/o/userinfo/
+      ESPOCRM_URL: http://mock-espocrm:8090
+      ESPOCRM_API_KEY: test-espocrm-api-key
+      REDMINE_URL: http://mock-redmine:8091
+      REDMINE_API_KEY: test-redmine-api-key
+      OUTLINE_URL: http://mock-outline:8092
+      OUTLINE_API_KEY: test-outline-api-key
+      # Production bounds are 10s per attempt and a 30s circuit window. The
+      # scenarios have to observe a timeout being retried to exhaustion and an
+      # upstream being shed and then recovering, so the stack shortens both
+      # rather than making the suite sleep through the real ones.
+      ADAPTER_TIMEOUT: 2s
+      ADAPTER_CIRCUIT_OPEN_FOR: 3s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-identity:
+        condition: service_healthy
+      mock-espocrm:
+        condition: service_healthy
+      mock-redmine:
+        condition: service_healthy
+      mock-outline:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [e2e-edge, e2e-data]
+
+networks:
+  e2e-edge:
+  e2e-data:
+    internal: true
