@@ -67,5 +67,39 @@ Three are worth knowing about before an incident:
 - **Events published by outcome** — "nothing happened" and "everything failed
   to publish" look identical on a chart that counts only successes.
 
+## Reading an empty panel
+
+An empty panel is the platform's most misleading output, because at three in
+the morning it reads as "no traffic" when it usually means something else.
+Before treating one as evidence, rule these out in order — they are listed
+cheapest first.
+
+**The dashboard was imported against the wrong datasource.** Covered above:
+every panel is empty, not one.
+
+**The platform has not done that thing yet.** A Prometheus counter publishes no
+series at all until something increments it, so a freshly started or freshly
+restarted platform shows "No data" on several panels until the first request,
+the first upstream call and the first published event. This is the platform
+being new, not the query being wrong. It resolves itself; nothing needs doing.
+
+**No adapter has a circuit breaker.** `bsystem_adapter_circuit_state` publishes
+nothing when no adapter has one, and the disabled placeholder standing in for
+an unconfigured integration does not. On a deployment with no integrations
+configured, the Circuit state panel is empty by design.
+
+**The integration was deliberately left out.** An unconfigured integration
+answers `503 adapter_not_configured` rather than serving requests, so its
+upstream panels stay empty because nothing is calling it. `docs/STAGE-ACCEPTANCE.md`
+treats that as a supported configuration; the dashboard has no way to
+distinguish it from an integration that has simply gone quiet, so check the
+deployment's environment before concluding anything.
+
+**The query is wrong.** Least likely, and now the easiest to rule out: the
+Integration Core pins its exposition in `cmd/server/metrics_contract_test.go`,
+which renders the real registry and checks every series, its type and its
+labels against the names this dashboard uses. A rename that would have emptied
+a panel fails that test first.
+
 The full metric reference is in
 `bsystem-integration-core/docs/OBSERVABILITY.md`.
