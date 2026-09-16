@@ -839,3 +839,69 @@ func TestEventPublishingIsRestrictedAndValidated(t *testing.T) {
 		})
 	}
 }
+
+// A scope revoked between two requests takes effect on the second.
+//
+// Every authorization decision is made per request, against the database:
+// internal/authz holds no cache, so this is true by construction rather than
+// by arrangement. That is exactly why it is worth pinning. The obvious way to
+// make this platform faster is to cache a principal's resolved access, and a
+// cache added without this test would keep a revoked scope working for as long
+// as its entry lived — with nothing failing, nothing logged, and the grant
+// showing as removed in every place an administrator would look.
+//
+// The customer role carries wiki.document.read and is confined, so it is
+// refused with scope_required until a grant matches, which makes the three
+// states here plain: refused, granted, refused again.
+func TestARevokedScopeStopsWorkingOnTheNextRequest(t *testing.T) {
+	harness := ready(t)
+
+	identity := harness.API(t, http.MethodGet, "/api/v1/me", TokenCustomer, nil)
+	if identity.Status != http.StatusOK {
+		t.Fatalf("resolve the customer identity: status = %d", identity.Status)
+	}
+	var me struct {
+		ID string `json:"id"`
+	}
+	identity.JSON(t, &me)
+	if me.ID == "" {
+		t.Fatal("the customer identity has no Global user ID")
+	}
+
+	grant := map[string]string{
+		"principal_type": "user",
+		"principal_id":   me.ID,
+		"scope_type":     "global",
+		"scope_id":       "*",
+		"permission_id":  "wiki.document.read",
+	}
+	revoke := func() {
+		harness.API(t, http.MethodDelete, "/api/v1/admin/rbac/scopes", TokenAdmin, grant)
+	}
+
+	documents := func() int {
+		t.Helper()
+		return harness.API(t, http.MethodGet, "/api/v1/documents", TokenCustomer, nil).Status
+	}
+
+	if status := documents(); status != http.StatusForbidden {
+		t.Fatalf("before any grant the customer must be refused, got %d", status)
+	}
+
+	// The grant is removed however this test ends, or every scenario that runs
+	// after it inherits a customer who can read the wiki.
+	t.Cleanup(revoke)
+
+	granted := harness.API(t, http.MethodPost, "/api/v1/admin/rbac/scopes", TokenAdmin, grant)
+	if granted.Status != http.StatusCreated {
+		t.Fatalf("grant the scope: status = %d (body: %s)", granted.Status, truncate(granted.Body))
+	}
+	if status := documents(); status != http.StatusOK {
+		t.Fatalf("after the grant the customer must be allowed, got %d", status)
+	}
+
+	revoke()
+	if status := documents(); status != http.StatusForbidden {
+		t.Errorf("after the revocation the customer must be refused again, got %d; a revoked scope that still works is a permission nobody can take away", status)
+	}
+}
