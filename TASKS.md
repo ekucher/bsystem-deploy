@@ -472,17 +472,52 @@ read. See `bsystem-integration-core/docs/SEARCH.md`.
 
 Priority: MEDIUM
 
-- [-] Server model
-- [-] HealthEvent
-- [-] BackupEvent
-- [-] MaintenanceEvent
-- [-] `SRV-*`
-- [-] relation to `CL-*` and optional `PR-*`
-- [-] `/api/v1/servers`
-- [-] `/api/v1/servers/{id}`
-- [-] `/api/v1/operations/events`
-- [-] mock provider
-- [-] BRAVO event contracts
+- [x] Server model — no hostname or address: the platform never connects to a
+      server, and an inventory of reachable addresses is internal topology
+- [x] HealthEvent — `server.ok/warning/error/offline`
+- [x] BackupEvent — `backup.succeeded/failed`, plus `selftest.*`
+- [x] MaintenanceEvent — `maintenance.started/completed`
+- [x] `SRV-*` — allocated by the platform, keyed by the reporter's identifier,
+      so re-registering a host returns the same Global ID
+- [x] relation to `CL-*` and optional `PR-*` — verified to resolve before
+      anything is stored; ambiguous ownership is refused
+- [x] `/api/v1/servers`
+- [x] `/api/v1/servers/{id}` — authorized against the owning client when there
+      is one, and refused before the lookup so it cannot enumerate hosts
+- [x] `/api/v1/operations/events`
+- [x] mock provider — the E2E `reporter`, which drives the contract from a
+      reporter's side and depends on nothing BRAVO-specific
+- [x] BRAVO event contracts — the platform's half: what BRAVO must call, with
+      what vocabulary, as which identity. See the blocked item below for the
+      other direction.
+
+A backup or self-test outcome deliberately does not move the server's status:
+it reports on a service the server runs, not on whether the server is up.
+Recording it as an error would put a healthy machine on a dashboard as broken.
+See `bsystem-integration-core/docs/OPERATIONS-MODULE.md`.
+
+- [!] BRAVO inbound adapter — the platform reading an inventory or a history
+      *out of* BRAVO
+
+```text
+BLOCKED:
+Task: BRAVO inbound adapter (platform pulls inventory and history from BRAVO)
+Repository: ekucher/bsystem-integration-core
+Reason: BRAVO's own API is not documented in any of the four repositories. An
+  adapter written against a guessed API would be a fiction that compiles: it
+  would pass its own contract tests, because the tests would be written
+  against the same guess.
+What is required from owner: BRAVO's API documentation — base URL shape,
+  authentication scheme, the inventory and event-history endpoints, and their
+  payloads. A sample response for each is enough to start.
+Safe work already completed: the push direction is done and green. BRAVO can
+  integrate today by registering hosts and reporting events against the
+  platform's machine API, which needs nothing from BRAVO's own API. That is
+  also the direction the architecture prefers — a platform that polled
+  infrastructure would be a second monitoring system disagreeing with the one
+  on call.
+Related commit/PR: ekucher/bsystem-integration-core#3, ekucher/bsystem-deploy#2
+```
 
 Events:
 
