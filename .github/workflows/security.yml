@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Gitleaks scans history, not just the working tree: a secret that
           # was committed and then removed is still a leaked secret. This
@@ -41,7 +41,7 @@ jobs:
         module: [mocks, e2e]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Trivy's misconfiguration scanner covers the Dockerfiles here. It has
       # no Docker Compose rules, so the Compose hardening is guarded instead
@@ -87,7 +87,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # One mock stands in for all four: they share a Dockerfile and a module,
       # so the image contents differ only in which command was linked in.
