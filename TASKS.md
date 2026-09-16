@@ -1093,17 +1093,46 @@ Goal: do not treat this backlog, documentation or existing tests as proof that
 all important properties are covered. Find claims the platform makes that no
 test actually proves.
 
-- [ ] inventory security, correctness and operational invariants across all four
+- [x] inventory security, correctness and operational invariants across all four
       repositories
-- [ ] identify every invariant described in docs/comments/config but lacking a
+- [x] identify every invariant described in docs/comments/config but lacking a
       direct test or executable check
-- [ ] prioritize authorization, tenant isolation, audit integrity, Global ID
+- [-] prioritize authorization, tenant isolation, audit integrity, Global ID
       immutability, migration safety, event delivery and secret handling
-- [ ] add non-vacuous tests: prove each new test fails when its invariant is
+- [x] add non-vacuous tests: prove each new test fails when its invariant is
       deliberately broken
-- [ ] fix defects discovered by those tests rather than changing expectations
+- [x] fix defects discovered by those tests rather than changing expectations
       to match incorrect behavior
-- [ ] record findings and rationale in the repository that owns the invariant
+- [x] record findings and rationale in the repository that owns the invariant
+
+Event delivery and secret handling in adapter errors remain, and are scheduled
+as P21 rather than duplicated here.
+
+The audit found ten defects so far, and the pattern in them is worth keeping:
+in almost every case the property was *stated* somewhere — a comment, a
+document, a variable name — and the statement was what made it look covered.
+
+| Finding | Where it was claimed | Landed |
+| --- | --- | --- |
+| an unconfigured integration answered "does not support this capability" | the registry knew it was unconfigured and `/health` said so | `core#6` |
+| the HUB rendered that 503 as a bare error | `DataState`'s own contract distinguishes these states | `hub#4` |
+| the authorization code stayed in the URL on a failed exchange | — | `hub#5` |
+| two dark-theme button labels below WCAG AA | `docs/ARCHITECTURE.md` requires sufficient contrast | `ds#4` |
+| a `_total` series published as a gauge | the name itself | `core#7` |
+| a skipped E2E suite reported success | the guard existed, in a file the test runner never reads | `deploy#9` |
+| stage preflight checked a variable the stage stack ignores | three documents named it as the one that governs | `deploy#12` |
+| the hardening checker never looked at `read_only` | `docs/DEPLOYMENT.md` said it failed on a regression in "any of this" | `deploy#12` |
+| an edited migration erased its own evidence | the comment beside the checksum said it made one visible | `core#9` |
+| a failed audit write was only logged | the same platform counts event and notification outcomes, for this exact reason | `core#11` |
+| concurrent allocation answered some callers with raw SQL | the error model forbids exposing SQL errors | `core#12` |
+
+Two are worth separating from the rest. The migration checksum and the audit
+write were both *mechanisms built for this purpose* that did the opposite: one
+overwrote the evidence it existed to preserve, the other recorded nothing a
+dashboard could see. And the concurrent-allocation case was not unnoticed at
+all — a test tolerated it deliberately, reasoning that a refused duplicate
+beats a silent second identity. That reasoning was sound and the options were
+three, not two.
 
 Definition of Done:
 - each newly claimed invariant is backed by an executable check;
@@ -1118,10 +1147,10 @@ Depends on: P19
 
 ## P20.1 Concurrency
 
-- [ ] run and expand `go test -race ./...`
+- [x] run and expand `go test -race ./...`
 - [ ] concurrent `EnsureIdentity`
 - [ ] concurrent `EnsureServiceIdentity`
-- [ ] concurrent Global ID allocation and source mapping
+- [x] concurrent Global ID allocation and source mapping
 - [ ] concurrent scope grant/revoke/read
 - [ ] concurrent audit writes
 - [ ] adapter registry/readiness concurrency
@@ -1130,7 +1159,7 @@ Depends on: P19
 ## P20.2 Database correctness
 
 - [ ] inspect transaction boundaries and error handling
-- [ ] verify uniqueness constraints close races rather than application checks
+- [x] verify uniqueness constraints close races rather than application checks
       alone
 - [ ] test rollback on partial failures
 - [ ] test concurrent startup/migration behavior
@@ -1139,6 +1168,17 @@ Depends on: P19
 - [ ] inspect indexes against actual lookup/order/filter paths
 - [ ] identify N+1 queries and repeated transactions not already covered by P16
 - [ ] document query-plan evidence when an index is added or rejected
+
+`core#12` landed the first of these. The constraint did close the race — no
+duplicate Global ID was ever minted — but the application path did not handle
+losing it: the read-then-insert took its snapshot before the winner committed,
+so the loser's INSERT hit the constraint and the driver error travelled all the
+way out as HTTP 400 with the table, column tuple and constraint name in the
+body. Eight racers, measured: six answered, two refused.
+
+The remaining P20.1 items (identity and service-identity races, scope grant and
+revoke, audit writes, adapter registry, shutdown in flight) and all of P20.2 are
+not yet done.
 
 Definition of Done:
 - race detector green;
