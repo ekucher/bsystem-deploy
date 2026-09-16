@@ -22,6 +22,7 @@ test-only placeholder for a throwaway container.
 docker compose config --quiet
 docker compose -f docker-compose.e2e.yml config --quiet
 python3 scripts/check-hardening.py
+python3 scripts/check-identity-groups.py
 (cd mocks && gofmt -l . && go vet ./... && go test -race ./...)
 (cd e2e && gofmt -l . && go vet ./...)
 ```
@@ -30,6 +31,17 @@ python3 scripts/check-hardening.py
 misconfiguration scanner has no Docker Compose rules, so that script is what
 stops a service quietly losing `no-new-privileges`, regaining capabilities, or
 publishing a port on every interface.
+
+`check-identity-groups.py` covers the one mistake the E2E stack cannot catch,
+because the stack replaces authentik with a mock. A BSYSTEM group name is
+written three times — in `authentik/blueprints/bsystem-groups.yaml`, in the
+identity mock, and in the Integration Core's RBAC seed — and the platform is
+deny-by-default, so a name that disagrees in one of them grants nothing without
+raising anything. On a real deployment that reads as a platform refusing
+everyone, with green tests and the cause one character deep in a YAML file. Run
+it with the Integration Core checked out beside this repository and it compares
+all three lists; on its own it compares the two this repository owns and says
+so.
 
 ## Writing an E2E scenario
 
