@@ -40,6 +40,14 @@ an already-rendered stack, which is how `scripts/tests/stage-scripts.test.sh`
 exercises it — so the script's own logic is covered on every push whether or
 not the job that renders can run.
 
+`check-artifacts.py` refuses a compiled executable or an archive tracked in
+Git, decided by leading bytes rather than by filename, and checks that every
+path `go build` writes to by default is ignored. `go build ./cmd/x` with no
+`-o` writes `./x`, and `bsystem-integration-core` committed a 13 MB binary
+straight through that gap. When this check was first run here it found four
+uncovered mock binaries. Add a Go command and it tells you to add its ignore
+line.
+
 `check-identity-groups.py` covers the one mistake the E2E stack cannot catch,
 because the stack replaces authentik with a mock. A BSYSTEM group name is
 written three times — in `authentik/blueprints/bsystem-groups.yaml`, in the

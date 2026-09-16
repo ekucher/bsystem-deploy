@@ -172,6 +172,9 @@ jobs:
       - name: Check acceptance docs reference paths that exist
         run: python3 scripts/check-doc-links.py
 
+      - name: Check no build artefact is tracked
+        run: python3 scripts/check-artifacts.py
+
       # The Integration Core is not checked out in this job, so the script
       # compares the two lists this repository owns and says so. The third —
       # the platform's own RBAC seed — is compared in the E2E job, which has

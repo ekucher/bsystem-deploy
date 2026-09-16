@@ -11,4 +11,14 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Where `go build` writes when nobody passes -o: a main package at a module
+# root builds to a file named after the directory, one under cmd/ to a file
+# named after the command. bsystem-integration-core committed a 13 MB binary
+# through exactly this gap. scripts/check-artifacts.py keeps this list in step
+# with the modules rather than waiting for somebody to notice again.
 loadtest/loadtest
+mocks/mock-espocrm
+mocks/mock-identity
+mocks/mock-outline
+mocks/mock-redmine
