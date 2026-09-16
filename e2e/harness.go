@@ -222,3 +222,58 @@ func (h *Harness) WaitReady(t *testing.T, timeout time.Duration) {
 	}
 	t.Fatalf("Integration Core did not become ready within %s: %v", timeout, lastErr)
 }
+
+// InjectFaultBody queues a fault that answers with a raw body of the test's
+// choosing, which is how a scenario makes an upstream return something other
+// than an error: a success status carrying a payload the adapter cannot read.
+//
+// The status/delay helpers above cannot express that. An upstream that is down
+// and an upstream that answers 200 with a broken payload are different
+// failures, and only the second one tests whether the platform validates what
+// it is told.
+func (h *Harness) InjectFaultBody(t *testing.T, mockURL, path string, status int, body string) {
+	t.Helper()
+	fault := map[string]any{"path": path, "status": status, "body": body}
+	response := h.Request(t, http.MethodPost, mockURL+"/__mock/faults", "", fault, nil)
+	if response.Status != http.StatusAccepted {
+		t.Fatalf("inject fault on %s: status = %d, body = %s", mockURL, response.Status, truncate(response.Body))
+	}
+	t.Cleanup(func() { h.ResetFaults(t, mockURL) })
+}
+
+// Do performs a call and returns an error instead of failing the test, so it
+// can be used from a goroutine. Request cannot: it calls t.Fatalf, and
+// t.Fatalf from a goroutine other than the test's own stops that goroutine
+// without failing the test, which is how a concurrency scenario reports
+// success while proving nothing.
+func (h *Harness) Do(method, url, token string, body any) (Response, error) {
+	var reader io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return Response{}, fmt.Errorf("encode request body: %w", err)
+		}
+		reader = bytes.NewReader(encoded)
+	}
+	request, err := http.NewRequest(method, url, reader)
+	if err != nil {
+		return Response{}, fmt.Errorf("build request: %w", err)
+	}
+	request.Header.Set("Accept", "application/json")
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	response, err := h.client.Do(request)
+	if err != nil {
+		return Response{}, fmt.Errorf("%s %s: %w", method, url, err)
+	}
+	defer response.Body.Close()
+	payload, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return Response{}, fmt.Errorf("read response body: %w", err)
+	}
+	return Response{Status: response.StatusCode, Headers: response.Header, Body: payload}, nil
+}
