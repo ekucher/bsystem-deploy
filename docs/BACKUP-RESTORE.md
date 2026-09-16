@@ -24,13 +24,20 @@ because a Global ID is deliberately not derivable from any upstream value.
 
 | Not backed up | Why |
 | --- | --- |
-| Redis (`redis_data`) | authentik cache and task broker; rebuilt on start |
 | NATS | no durable state in this deployment; events in flight are lost, which is already true whenever NATS is down |
 | Container images | rebuilt from the repositories; the release manifest records which commits |
 | EspoCRM, Redmine, Outline data | **source systems are authoritative and are backed up by whoever runs them.** BSYSTEM holds mappings, not copies |
 | Search index | rebuilt by re-indexing; the in-memory provider has nothing to lose |
 
-That last row is the architectural point: BSYSTEM is not a second CRM. Its
+A `redis_data` volume may survive on a host that ran an older revision of
+this stack. It is not in the table because there is no Redis service any more,
+and it never held anything: authentik here is configured against PostgreSQL
+alone, and the Integration Core never read `REDIS_URL`. Three documents,
+including this one, described that volume as authentik's cache and task broker.
+It can be removed with `docker volume rm bsystem_redis_data` once the stack is
+down, or left alone — nothing reads it either way.
+
+The row about source systems is the architectural point: BSYSTEM is not a second CRM. Its
 backup protects the mapping and governance layer, not the business data, and a
 restore does not — and must not — try to put a source system back.
 
@@ -123,10 +130,10 @@ Ordering matters here more than the commands do.
    docker compose exec -T postgres pg_restore -U bsystem -d bsystem_integration --no-owner < backups/<file>.dump
    ```
 
-4. **Start in dependency order** — PostgreSQL and Redis, then authentik, then
+4. **Start in dependency order** — PostgreSQL and NATS, then authentik, then
    the Core, then the HUB.
    ```bash
-   docker compose up -d postgres redis nats
+   docker compose up -d postgres nats
    docker compose up -d authentik-server authentik-worker
    docker compose up -d integration-core
    docker compose up -d hub

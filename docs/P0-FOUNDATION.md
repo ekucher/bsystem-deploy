@@ -1,5 +1,10 @@
 # BSYSTEM Deploy P0 — Foundation
 
+> P0 originally provisioned Redis. Nothing ever used it, and it was removed;
+> git history has what P0 shipped. This document describes the stack as it
+> stands, so that a reader planning against it is not planning around a
+> service that is not there.
+
 ## Goal
 
 Provide a reproducible Docker Compose environment for the first BSYSTEM platform milestone.
@@ -11,7 +16,6 @@ Required:
 - reverse proxy
 - authentik
 - PostgreSQL
-- Redis
 - `bsystem-hub`
 - `bsystem-integration-core`
 
@@ -30,10 +34,10 @@ Use separate Docker networks:
 ```text
 edge        reverse proxy -> published web services
 platform    HUB <-> Integration Core <-> internal platform services
-data        application services -> PostgreSQL/Redis
+data        application services -> PostgreSQL
 ```
 
-PostgreSQL and Redis must not be published to the public interface.
+PostgreSQL must not be published to the public interface.
 
 ## Recommended DNS names
 
@@ -58,7 +62,6 @@ Expected classes of configuration:
 
 ```text
 POSTGRES_*
-REDIS_*
 AUTHENTIK_*
 OIDC_*
 HUB_*
@@ -72,8 +75,6 @@ Durable Docker volumes are required for:
 - PostgreSQL
 - authentik media/data where applicable
 - future search index if reconstruction is not desirable
-
-Redis should be treated as reconstructable unless a feature explicitly requires persistence.
 
 ## Backup baseline
 
@@ -100,7 +101,7 @@ A fresh DEV host should be able to reach a functional login flow using only docu
 - HUB is reachable through HTTPS/DEV TLS policy
 - HUB can complete OIDC login
 - HUB can reach Integration Core internally
-- PostgreSQL/Redis are not exposed publicly
+- PostgreSQL is not exposed publicly
 - containers have restart policies
 - no real credentials exist in Git
 - backup/restore procedure is documented

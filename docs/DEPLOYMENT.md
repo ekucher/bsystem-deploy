@@ -34,7 +34,7 @@ network.
 
 Every service sets `no-new-privileges` and drops `ALL` capabilities. Where an
 image's entrypoint genuinely needs some back to drop its own privileges —
-postgres and redis — exactly those are re-added and the reason is written at
+postgres — exactly those are re-added and the reason is written at
 the service. The stateless services (Integration Core, HUB, the mock upstreams)
 run on a read-only root filesystem.
 

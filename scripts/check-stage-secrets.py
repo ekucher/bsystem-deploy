@@ -61,7 +61,7 @@ HOST = re.compile(r"(?i)\bhttps?://([a-z0-9][a-z0-9.-]*)")
 # links to.
 ALLOWED_HOSTS = {
     "localhost", "127.0.0.1", "0.0.0.0", "::1",
-    "postgres", "redis", "nats", "authentik-server", "integration-core", "hub",
+    "postgres", "nats", "authentik-server", "integration-core", "hub",
     "spec.openapis.org", "www.rfc-editor.org", "tools.ietf.org",
     "github.com", "docs.github.com", "opensource.org",
 }

@@ -258,6 +258,48 @@ else
   bad "the manifest is not valid JSON with every sibling repository absent"
 fi
 
+# --- check-identity-groups.py ------------------------------------------------
+#
+# The checker compares three lists of BSYSTEM group names. A checker that
+# silently matches nothing would report agreement between two empty sets, which
+# is the failure it exists to prevent — and the first draft did exactly that in
+# reverse, capturing "name: BSYSTEM-Admins" instead of the group, so every name
+# looked like a mismatch. Both directions are covered here.
+
+./scripts/check-identity-groups.py >/dev/null 2>&1
+check "$?" "0" "the group names agree as committed"
+
+GROUPS_WORK="$WORK/groups"
+mkdir -p "$GROUPS_WORK/scripts" "$GROUPS_WORK/authentik/blueprints" \
+         "$GROUPS_WORK/mocks/cmd/mock-identity"
+cp scripts/check-identity-groups.py "$GROUPS_WORK/scripts/"
+
+write_group_fixtures() {
+  printf 'entries:\n  - identifiers:\n      name: %s\n' "$1" \
+    > "$GROUPS_WORK/authentik/blueprints/bsystem-groups.yaml"
+  printf 'package main\nvar x = Principal{Groups: []string{"%s"}}\n' "$2" \
+    > "$GROUPS_WORK/mocks/cmd/mock-identity/principals.go"
+}
+
+write_group_fixtures "BSYSTEM-Admins" "BSYSTEM-Admins"
+(cd "$GROUPS_WORK" && ./scripts/check-identity-groups.py >/dev/null 2>&1)
+check "$?" "0" "matching group names pass"
+
+# The real defect: one character, and the platform silently grants nothing.
+write_group_fixtures "BSYSTEM-Admin" "BSYSTEM-Admins"
+group_output="$(cd "$GROUPS_WORK" && ./scripts/check-identity-groups.py 2>&1)"
+check "$?" "1" "a blueprint typo is caught"
+if contains "$group_output" "BSYSTEM-Admin "; then
+  ok "the mismatch names the group rather than the line it was found on"
+else
+  bad "the mismatch does not name the group cleanly: $group_output"
+fi
+
+# A blueprint with no groups must not read as "everything agrees".
+printf 'entries: []\n' > "$GROUPS_WORK/authentik/blueprints/bsystem-groups.yaml"
+(cd "$GROUPS_WORK" && ./scripts/check-identity-groups.py >/dev/null 2>&1)
+check "$?" "1" "an empty blueprint fails rather than matching an empty set"
+
 echo
 printf '%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -gt 0 ] && exit 1

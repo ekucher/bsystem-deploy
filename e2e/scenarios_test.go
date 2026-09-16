@@ -35,6 +35,14 @@ type entityView struct {
 	Status       string `json:"status"`
 	CollectionID string `json:"collection_id"`
 	UpdatedAt    string `json:"updated_at"`
+	// Optional upstream detail. Every one of these is `omitempty` all the way
+	// down, so a broken field mapping removes it from the response rather than
+	// failing — see upstream_fields_test.go.
+	Website     string `json:"website"`
+	Email       string `json:"email"`
+	Phone       string `json:"phone"`
+	Description string `json:"description"`
+	URL         string `json:"url"`
 }
 
 // collectionResponse is the envelope every normalized collection returns.

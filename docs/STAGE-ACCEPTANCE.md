@@ -18,7 +18,6 @@ source systems BSYSTEM reads and never writes.
 | Integration Core | platform | yes | normalized API, authorization, adapters, events |
 | HUB | platform | yes | the browser application |
 | PostgreSQL | platform | yes | mappings, RBAC, audit, notifications, support, AI audit |
-| Redis | platform | yes | authentik's cache and task broker |
 | NATS | platform | no | event bus; absent means degraded, not down |
 | EspoCRM | source | no | authoritative for clients and contacts |
 | Redmine | source | no | authoritative for projects and issues |
@@ -26,9 +25,17 @@ source systems BSYSTEM reads and never writes.
 
 A source system is optional in the literal sense that the platform starts and
 serves without it: the adapter stays disabled when its URL is empty, and the
-endpoints it backs answer with an empty collection rather than an error. An
-acceptance that means to test CRM data obviously needs EspoCRM configured — the
-point is that a missing Redmine does not stop you accepting the CRM path.
+rest of the platform works. The endpoints that adapter backs answer **`503
+upstream_unavailable`**, for collections as well as for detail reads.
+
+That is deliberate, and the tempting alternative would be worse: an empty
+collection would tell an operator the platform knows of no clients, when what
+is true is that nobody has told it where to look. A missing integration must
+not be indistinguishable from missing data.
+
+So a missing Redmine does not stop you accepting the CRM path — but expect
+`503` from `/api/v1/projects` and `/api/v1/issues` while it is missing, not an
+empty list. The smoke runner accepts that code for exactly this reason.
 
 NATS is the one degraded-but-alive dependency: `/readyz` reports `nats:
 degraded` and the platform keeps serving. Events are not queued while it is
@@ -65,7 +72,6 @@ restarting it.
 | `HTTP_ADDR` | public config | optional | `:8080` | Listen address. |
 | `DATABASE_URL` | **secret** | **required** | — | Carries the password. Never log it; the mapping audit redacts it from errors. |
 | `NATS_URL` | public config | optional | — | Empty disables eventing. |
-| `REDIS_URL` | public config | optional | — | Used by authentik; the Core does not require it. |
 | `AUTHENTIK_USERINFO_URL` | public config | **required** | — | Server-to-server UserInfo endpoint. Must be reachable **from the Core container**, which is not the same as from your laptop. |
 | `LOG_LEVEL` | public config | optional | `info` | |
 | `DATABASE_MAX_CONNS` | public config | optional | driver default | Bounded at 500; an out-of-range value falls back rather than failing. |
@@ -122,12 +128,12 @@ Integration Core ──▶ authentik     UserInfo (server-to-server)
 Integration Core ──▶ PostgreSQL    internal network only
 Integration Core ──▶ NATS          internal network only
 Integration Core ──▶ EspoCRM / Redmine / Outline   egress
-authentik        ──▶ PostgreSQL, Redis             internal network only
+authentik        ──▶ PostgreSQL                    internal network only
 ```
 
 Two properties hold in the Compose topology and should hold in stage:
 
-- **PostgreSQL, Redis and NATS are on internal networks** and are not published.
+- **PostgreSQL and NATS are on internal networks** and are not published.
   Nothing outside the stack reaches them.
 - **The browser talks to authentik and the Core directly**, not through the HUB.
   The HUB is static files; it holds no token and proxies no API call in stage.

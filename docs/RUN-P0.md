@@ -32,7 +32,7 @@ Do not commit `.env`.
 For the first startup, the authentik Client ID does not exist yet. Start infrastructure and authentik first:
 
 ```bash
-docker compose up -d postgres redis nats authentik-server authentik-worker integration-core
+docker compose up -d postgres nats authentik-server authentik-worker integration-core
 ```
 
 Complete authentik initial setup, create the `BSYSTEM-HUB` OAuth2/OIDC Public provider, then put its Client ID into `.env`. See [AUTHENTIK-OIDC.md](AUTHENTIK-OIDC.md).

@@ -21,7 +21,7 @@ Legend:
 
 ## Delivery status
 
-P1-P16 are delivered and merged to `main` in all four repositories, 2026-09-16.
+P1-P17 are delivered and merged to `main` in all four repositories, 2026-09-16.
 
 An item marked `[x]` below is merged, not merely implemented locally. The merge
 commit that landed it is listed here, and both `CI` and `Security` are green on
@@ -31,6 +31,8 @@ Three `[ ]` items inside P1-P16 are deliberately not done rather than pending;
 each carries its reason inline (E2E does not stack the static SPA, no Read Only
 role exists, and the integration health summary would require widening the
 machine boundary). They are not scheduled work.
+
+P1-P16:
 
 | Repository | Pull request | Merge commit |
 | --- | --- | --- |
@@ -42,6 +44,76 @@ machine boundary). They are not scheduled work.
 Merged in that order: `bsystem-integration-core` before `bsystem-deploy`, because
 each repository's `Autonomous E2E` job resolves the other's branch by name and
 falls back to `main`.
+
+P17, which touched two repositories:
+
+| Repository | Pull request | Merge commit | Method |
+| --- | --- | --- | --- |
+| `bsystem-integration-core` | #4 | `6e9c66e` | merge |
+| `bsystem-deploy` | #3 | `ed0ac39` | **squash** |
+| `bsystem-deploy` | #4 | `fe23ed6` | merge |
+
+`bsystem-deploy#3` was squashed deliberately. An intermediate commit on that
+branch carried credential-shaped test fixtures — literals that gitleaks and
+GitGuardian were right to flag, since a committed random-looking string is
+indistinguishable from a real credential. Squashing kept that commit out of
+`main` entirely; the merged tree generates those fixtures per run instead.
+
+`bsystem-deploy#4` then removed the `.gitleaksignore` that had been carrying
+those findings, because after the squash nothing in the repository reached the
+commit they referenced. An allowlist nobody can justify is how a real finding
+gets suppressed later.
+
+After P17, work continued on the properties the backlog assumed rather than
+proved. A PostgreSQL was installed in the working environment, which changed the
+method: these tests were run for real before being pushed, instead of being
+pushed for CI to try first.
+
+| Repository | Pull request | Merge commit | What it landed |
+| --- | --- | --- | --- |
+| `bsystem-deploy` | #5 | `7821ef7` | this delivery record |
+| `bsystem-integration-core` | #5 | `e64612a` | the store layer, RBAC and scope grants, Global ID immutability, the audit trail, the mapping audit's own queries, and the tenant isolation matrix, all executed against a real PostgreSQL |
+| `bsystem-deploy` | #6 | `366f835` | the correction those tests produced |
+
+`bsystem-deploy#6` is worth reading as a result rather than a fix. Two P17
+artefacts of mine — `docs/STAGE-ACCEPTANCE.md` and both smoke runners — described
+an unconfigured adapter as answering with an empty collection. It answers `503
+upstream_unavailable`. A stage deployment that deliberately left an integration
+out, which the same document invites, would have been reported as failing by a
+runner watching a platform behave correctly. The handler-level test found it by
+failing; nothing in review had.
+
+The same method continued past that point, and kept producing the same kind of
+result: a property the codebase asserts somewhere and proves nowhere, a test
+written for it, and the test correcting the hypothesis rather than confirming
+it.
+
+| Repository | Pull request | Merge commit | What it landed |
+| --- | --- | --- | --- |
+| `bsystem-integration-core` | #6 | `066613a` | an unconfigured integration answered "does not support this capability"; the status is now checked before the capability |
+| `bsystem-hub` | #4 | `420d8a8` | the HUB rendered that same 503 as a bare "Помилка"; three 503s are now told apart, because the reader's next step differs for each |
+| `bsystem-hub` | #5 | `e7ed340` | the authorization code stayed in the URL when the exchange failed; the strip moved into a `finally` |
+| `bsystem-design-system` | #4 | `03fb5d7` | two dark-theme button labels measured below WCAG AA; the fill became its own token, and contrast is now measured from `tokens.css` directly |
+| `bsystem-hub` | #2, #1 | `a5cd6aa`, `0bbc881` | `actions/checkout` and `actions/setup-node` 4 → 7 |
+| `bsystem-integration-core` | #7 | `6d37af3` | `bsystem_database_pool_acquires_total` was published as a gauge; the registry gained `CounterFunc`, and `/metrics` now has a contract test |
+| `bsystem-deploy` | #8 | `2fea7b8` | how to read an empty Grafana panel, which is the dashboard's most misleading output |
+| `bsystem-deploy` | #9 | `3f43534` | a skipped E2E suite reported success; `E2E_REQUIRED=1` in CI now makes a skip a failure |
+| `bsystem-deploy` | #10 | `356c392` | Redis removed: nothing ever talked to it, and three documents had come to describe its volume as authentik's cache |
+| `bsystem-integration-core` | #8 | `469feed` | the architectural reservation for Redis stands; what changes is that the first feature to need one adds the service with the use |
+
+Two of those are worth reading as results rather than fixes.
+
+`bsystem-deploy#9`: `TestMain` lived in `required.go`, not a `_test.go` file, so
+the testing framework never called it. The guard meant to make a skipped suite
+fail had itself been skipped since it was written. Running it for real is what
+said so; nothing in review had.
+
+`bsystem-deploy#10`: the Redis service was provisioned in P0 and never used. A
+running container nothing talks to is worse than no container, and this
+deployment demonstrated why — `SECURITY.md`, `docs/DEPLOYMENT.md` and
+`docs/BACKUP-RESTORE.md` all came to describe it as authentik's cache and task
+broker, which it never was. authentik was configured against PostgreSQL alone,
+and the Integration Core never read `REDIS_URL`.
 
 The 14 `[!]` items are unaffected and remain the only work left in this backlog.
 
@@ -429,8 +501,9 @@ the above; `docker-compose.e2e.yml` is additionally started for real by the
 E2E job, so a capability set that breaks a container fails the build.
 
 Capabilities are left to the image's own entrypoint for authentik, and
-postgres and redis keep the five and four capabilities their entrypoints need
-to drop their own privileges. Those are documented at the services.
+postgres keeps the five capabilities its entrypoint needs to drop its own
+privileges. Those are documented at the service. Redis kept four for the same
+reason until the service was removed for want of anything using it.
 
 # P9 — Notifications
 

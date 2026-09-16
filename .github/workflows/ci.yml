@@ -172,6 +172,13 @@ jobs:
       - name: Check acceptance docs reference paths that exist
         run: python3 scripts/check-doc-links.py
 
+      # The Integration Core is not checked out in this job, so the script
+      # compares the two lists this repository owns and says so. The third —
+      # the platform's own RBAC seed — is compared in the E2E job, which has
+      # the sibling checkout.
+      - name: Check the BSYSTEM group names agree
+        run: python3 scripts/check-identity-groups.py
+
   e2e:
     name: Autonomous E2E
     runs-on: ubuntu-latest
@@ -221,6 +228,12 @@ jobs:
         working-directory: e2e
         run: go vet ./...
 
+      # Here the Integration Core is checked out beside this repository, so the
+      # script also compares the platform's RBAC seed — the list that actually
+      # decides which role a group grants.
+      - name: Check the BSYSTEM group names agree with the platform's seed
+        run: python3 scripts/check-identity-groups.py
+
       - name: Start the E2E stack
         env:
           INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
@@ -229,6 +242,12 @@ jobs:
       - name: Run E2E scenarios
         working-directory: e2e
         env:
+          # The scenarios skip when no stack is configured, so that
+          # `go test ./...` stays safe on a developer's machine. A skipped Go
+          # test exits zero, so here — where the stack is up and the whole
+          # point of the job is to exercise it — a missing E2E_BASE_URL must
+          # fail rather than pass silently.
+          E2E_REQUIRED: "1"
           E2E_BASE_URL: http://127.0.0.1:8080
           E2E_IDENTITY_URL: http://127.0.0.1:9000
           E2E_ESPOCRM_URL: http://127.0.0.1:8090
