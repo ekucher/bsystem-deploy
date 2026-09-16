@@ -21,7 +21,7 @@ Legend:
 
 ## Delivery status
 
-P1-P16 are delivered and merged to `main` in all four repositories, 2026-09-16.
+P1-P17 are delivered and merged to `main` in all four repositories, 2026-09-16.
 
 An item marked `[x]` below is merged, not merely implemented locally. The merge
 commit that landed it is listed here, and both `CI` and `Security` are green on
@@ -31,6 +31,8 @@ Three `[ ]` items inside P1-P16 are deliberately not done rather than pending;
 each carries its reason inline (E2E does not stack the static SPA, no Read Only
 role exists, and the integration health summary would require widening the
 machine boundary). They are not scheduled work.
+
+P1-P16:
 
 | Repository | Pull request | Merge commit |
 | --- | --- | --- |
@@ -42,6 +44,25 @@ machine boundary). They are not scheduled work.
 Merged in that order: `bsystem-integration-core` before `bsystem-deploy`, because
 each repository's `Autonomous E2E` job resolves the other's branch by name and
 falls back to `main`.
+
+P17, which touched two repositories:
+
+| Repository | Pull request | Merge commit | Method |
+| --- | --- | --- | --- |
+| `bsystem-integration-core` | #4 | `6e9c66e` | merge |
+| `bsystem-deploy` | #3 | `ed0ac39` | **squash** |
+| `bsystem-deploy` | #4 | `fe23ed6` | merge |
+
+`bsystem-deploy#3` was squashed deliberately. An intermediate commit on that
+branch carried credential-shaped test fixtures — literals that gitleaks and
+GitGuardian were right to flag, since a committed random-looking string is
+indistinguishable from a real credential. Squashing kept that commit out of
+`main` entirely; the merged tree generates those fixtures per run instead.
+
+`bsystem-deploy#4` then removed the `.gitleaksignore` that had been carrying
+those findings, because after the squash nothing in the repository reached the
+commit they referenced. An allowlist nobody can justify is how a real finding
+gets suppressed later.
 
 The 14 `[!]` items are unaffected and remain the only work left in this backlog.
 
