@@ -406,6 +406,63 @@ if contains "$nobind_output" "proves nothing"; then
 else
   bad "the missing-bind failure is unclear: $nobind_output"
 fi
+# --- every Go module is inside the security scanners -------------------------
+#
+# The matrix that decides what govulncheck and staticcheck see is written by
+# hand, and a module missing from it produces no failure and no output: an
+# unscanned module and a clean one print the same nothing. loadtest was in that
+# state — compiled by CI, shipped by this repository, scanned by neither.
+
+if python3 scripts/check-scan-coverage.py >/dev/null 2>&1; then
+  ok "every Go module is covered by the security scanners"
+else
+  bad "a Go module is outside the security scanners: $(python3 scripts/check-scan-coverage.py 2>&1)"
+fi
+
+SCAN_WORK="$WORK/scan"
+mkdir -p "$SCAN_WORK"
+
+# The real workflow is copied rather than edited: a test that mutates a tracked
+# file and puts it back leaves the working tree wrong if it is interrupted.
+cp .github/workflows/security.yml "$SCAN_WORK/dropped.yml"
+sed -i 's/module: \[mocks, e2e, loadtest\]/module: [mocks, e2e]/' "$SCAN_WORK/dropped.yml"
+scan_output="$(python3 scripts/check-scan-coverage.py "$SCAN_WORK/dropped.yml" 2>&1)"
+check "$?" "1" "a Go module missing from a scanner matrix is caught"
+if contains "$scan_output" "loadtest/go.mod"; then
+  ok "the coverage failure names the unscanned module"
+else
+  bad "the coverage failure does not name the module: $scan_output"
+fi
+
+# And the other direction: an entry that names nothing scans nothing, and would
+# otherwise sit in the matrix looking like coverage.
+cp .github/workflows/security.yml "$SCAN_WORK/stale.yml"
+sed -i '0,/module: \[mocks, e2e, loadtest\]/s//module: [mocks, e2e, loadtest, ghost]/' "$SCAN_WORK/stale.yml"
+stale_output="$(python3 scripts/check-scan-coverage.py "$SCAN_WORK/stale.yml" 2>&1)"
+check "$?" "1" "a matrix entry naming no module is caught"
+if contains "$stale_output" "ghost"; then
+  ok "the stale-entry failure names the entry"
+else
+  bad "the stale-entry failure does not name the entry: $stale_output"
+fi
+
+# --- this repository's Go depends on nothing third-party ---------------------
+#
+# e2e/harness.go states it as a property of the package: "deliberately has no
+# third-party dependencies". Nothing held it. A dependency added here is a
+# supply-chain decision and a licence to account for, and the first one arrives
+# as a convenience in a test — where it is least likely to be argued about.
+
+for module in mocks e2e loadtest; do
+  if [ -f "$module/go.sum" ]; then
+    bad "$module has a go.sum: a third-party dependency was added without argument"
+  elif grep -qE '^\s*require' "$module/go.mod"; then
+    bad "$module/go.mod requires something: a third-party dependency was added"
+  else
+    ok "$module depends on nothing third-party"
+  fi
+done
+
 # --- which variable actually publishes the stage ports -----------------------
 #
 # The stage overlay replaces every port mapping with STAGE_PUBLISH_ADDRESS.

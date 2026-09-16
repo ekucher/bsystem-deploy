@@ -1449,14 +1449,51 @@ the checker rejects it and that a CRLF text file is not mistaken for one.
 
 ## P24.2 Supply chain
 
-- [ ] review GitHub Actions pinning policy and document whether major tags or
+- [x] review GitHub Actions pinning policy and document whether major tags or
       immutable SHAs are required
-- [ ] verify govulncheck/npm audit/Trivy/Gitleaks/CodeQL still cover every repo
+      — every workflow in all four repositories pins to a mutable major tag,
+      not an immutable SHA. SECURITY.md now states that as a decision with its
+      reasoning and the condition that should reverse it (the first workflow
+      given a token that can write to a registry, a deployment target or
+      another repository), rather than leaving it to look like nobody checked.
+      The tags have also drifted apart — `actions/checkout` is v7 here and in
+      HUB, v4 in Core and the Design System; `actions/setup-node` is v7 in HUB,
+      v4 in the other two — and the table records it, because a reader cannot
+      tell a deliberate difference from an unnoticed one
+- [x] verify govulncheck/npm audit/Trivy/Gitleaks/CodeQL still cover every repo
       and relevant image
-- [ ] verify SBOM artefacts are generated from the exact build being tested
-- [ ] review Docker base image pinning/update policy
+      — verified per repository, and it found a gap: `govulncheck` here took
+      its modules from a hand-written matrix listing `mocks` and `e2e`.
+      `loadtest` is compiled by CI and shipped by this repository and was
+      scanned by nothing. It was never removed — it was never added, and there
+      was no way to notice, because a module absent from the matrix produces
+      no failure and no output. Fixed, and now machine-checked by
+      `scripts/check-scan-coverage.py` in both directions. The same review
+      found this repository's Go had `govulncheck` and no static analysis at
+      all while Integration Core has run `staticcheck` since it had CI; that
+      asymmetry is closed too. An earlier note in this session said deploy has
+      "no application code" — that was wrong, it has three Go modules
+- [x] verify SBOM artefacts are generated from the exact build being tested
+      — checked, and the answer is no. The SBOM is generated from an image
+      built inside the Security job, not from the image the E2E job ran. The
+      four mocks share one Dockerfile and one module so one SBOM does describe
+      them all, but it is a rebuild of the same source rather than the tested
+      artefact. Recorded in SECURITY.md as what the SBOM does and does not
+      answer, instead of being left to imply more than it delivers
+- [x] review Docker base image pinning/update policy
+      — pinned to version tags, not digests, and documented with the same
+      reasoning as the actions: a tag that keeps receiving patch updates is
+      what makes a rebuild pick up a fixed CVE, and a digest pin without an
+      updater freezes the vulnerabilities along with the version
 - [ ] generate a dependency/license inventory and flag incompatible licenses if
       any
+      — half done. This repository's three Go modules depend on nothing
+      third-party: no `go.sum`, no `require`, so there is no licence here to
+      account for. `e2e/harness.go` states that as a property of the package
+      and nothing held it, so a guard now does — the first third-party
+      dependency tends to arrive as a convenience in a test, where it is least
+      likely to be argued about. The inventory still owed is Integration Core's
+      26 Go modules and the npm trees of HUB and the Design System
 
 Definition of Done:
 - rendered stacks are security-checked rather than source YAML only;

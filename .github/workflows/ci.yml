@@ -172,6 +172,11 @@ jobs:
       - name: Check acceptance docs reference paths that exist
         run: python3 scripts/check-doc-links.py
 
+      - name: Check every Go module is covered by the security scanners
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check-scan-coverage.py
+
       - name: Check no build artefact is tracked
         run: python3 scripts/check-artifacts.py
 
