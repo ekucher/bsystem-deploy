@@ -444,6 +444,45 @@ else
 fi
 
 
+# --- check-artifacts.py ------------------------------------------------------
+#
+# bsystem-integration-core carried a 13 MB executable at its root, committed
+# because `go build ./cmd/x` writes ./x and .gitignore covered only the
+# directories a build can be told to use. This repository has the same shape,
+# and had four uncovered mock binaries when the check was first run.
+
+python3 scripts/check-artifacts.py >/dev/null 2>&1
+check "$?" "0" "the repository tracks no build artefact"
+
+# A stray binary does not arrive with a helpful suffix, so the check reads
+# leading bytes. A .md file holding an ELF header must still fail.
+ART_WORK="$WORK/artifacts"
+mkdir -p "$ART_WORK"
+printf '\177ELF\002\001\001\000' > "notes-from-a-build.md"
+git add -f "notes-from-a-build.md" 2>/dev/null
+art_output="$(python3 scripts/check-artifacts.py 2>&1)"
+art_status=$?
+git rm -q --cached "notes-from-a-build.md" 2>/dev/null
+rm -f "notes-from-a-build.md"
+check "$art_status" "1" "a tracked executable is caught whatever it is named"
+if contains "$art_output" "an ELF executable"; then
+  ok "the artefact failure says what the file actually is"
+else
+  bad "the artefact failure does not identify the file: $art_output"
+fi
+
+# The second property: the paths a default build writes to must be ignored, so
+# committing one is never a \`git add -A\` away. This is the check that found
+# the four mock binaries.
+for output in mocks/mock-identity mocks/mock-espocrm mocks/mock-redmine mocks/mock-outline loadtest/loadtest; do
+  if git check-ignore -q "$output"; then
+    ok "git ignores $output"
+  else
+    bad "git does not ignore $output, which \`go build\` writes"
+  fi
+done
+
+
 echo
 printf '%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -gt 0 ] && exit 1

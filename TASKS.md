@@ -1032,14 +1032,47 @@ Priority: HIGH
 Goal: remove generated or accidental repository artefacts and make their return
 fail CI rather than rely on review.
 
-- [ ] inspect the committed `bsystem-integration-core/mapping-audit` root file
-- [ ] if it is a compiled/generated executable, remove it from Git while keeping
+- [x] inspect the committed `bsystem-integration-core/mapping-audit` root file
+- [x] if it is a compiled/generated executable, remove it from Git while keeping
       `cmd/mapping-audit` source intact
-- [ ] add precise ignore rule(s) for local build output without hiding source
-- [ ] scan all four repositories for committed binaries, archives, coverage
+- [x] add precise ignore rule(s) for local build output without hiding source
+- [x] scan all four repositories for committed binaries, archives, coverage
       outputs, temporary files and generated build directories
-- [ ] add a CI guard that rejects known generated executable/build artefacts
-- [ ] document any intentionally committed generated file and why it belongs
+- [x] add a CI guard that rejects known generated executable/build artefacts
+- [x] document any intentionally committed generated file and why it belongs
+
+It was a 13 MB ELF executable, and it held no credential: the strings that look
+like one are Go stdlib and pgx symbols. It did embed the build machine's module
+paths, which is a consequence of committing a binary rather than of anything in
+it.
+
+The cause is the part worth keeping. `go build ./cmd/x` with no `-o` writes
+`./x` in the repository root, and both Go repositories ignored only the
+directories a build can be *told* to use. This repository already carried the
+same scar — a `loadtest/loadtest` line added the last time it happened — and
+the new check found four more uncovered mock binaries on its first run.
+
+So both guards check the property rather than a list of paths: nothing tracked
+may be a compiled executable or an archive, decided by leading bytes because a
+stray binary does not arrive with a helpful suffix; and every default build
+output must be ignored, asked of `git check-ignore` rather than by
+reimplementing precedence. `bsystem-hub` and `bsystem-design-system` were
+scanned and are clean; their build output is directory-shaped (`dist/`,
+`node_modules/`) and already ignored, so the root-file gap that produced this
+one does not exist there.
+
+History is not rewritten. The blob stays reachable in the commit that added it,
+because rewriting published history is not an autonomous act. What changed is
+that it is no longer in the tree and cannot return unnoticed.
+
+Delivered in `bsystem-integration-core#10` and `bsystem-deploy#13`.
+
+One thing was found on the way and is fixed in the same change: the commit that
+added this P18-P27 backlog turned `main` red. `check-doc-links.py` flagged
+`docs/openapi.yaml` in P22, which names a file in the Integration Core and
+resolves against this repository, where there is none. Corrected to
+`bsystem-integration-core/docs/openapi.yaml`. The checker was right and its own
+comment had already described this exact ambiguity.
 
 Definition of Done:
 - no accidental build artefact remains tracked;
@@ -1147,7 +1180,7 @@ Goal: Spectral validates the document; this task validates that the document and
 running HTTP surface describe the same contract.
 
 - [ ] build an inventory of registered human and service routes
-- [ ] compare implemented method/path pairs with `docs/openapi.yaml`
+- [ ] compare implemented method/path pairs with `bsystem-integration-core/docs/openapi.yaml`
 - [ ] fail CI on undocumented implemented public API routes
 - [ ] fail CI on documented routes with no implementation
 - [ ] verify important success and rejection status codes against handlers
