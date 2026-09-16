@@ -39,6 +39,21 @@ MAGIC = [
     (b"\x28\xb5\x2f\xfd", "a zstd archive"),
 ]
 
+
+def is_python_bytecode(head: bytes) -> bool:
+    """Whether head begins a CPython .pyc.
+
+    Bytecode has no fixed prefix to match: its magic number is a little-endian
+    version counter, so it changes with every CPython release and a table of
+    known values goes stale silently. What does not change is the shape — two
+    version bytes, then CR LF, then a 32-bit field.
+
+    Bytes 2 and 3 alone are not enough: a CRLF text file whose first line is
+    two characters looks identical. The NUL in the field that follows is what
+    separates them, because a text file does not carry one.
+    """
+    return len(head) >= 8 and head[2:4] == b"\r\n" and b"\x00" in head[4:8]
+
 # Binary files that are legitimately tracked, each with its reason. Empty: this
 # repository tracks none, and an addition should argue for itself in a diff
 # somebody reads, which is the one thing a binary blob otherwise escapes.
@@ -120,14 +135,15 @@ def main() -> int:
             problems.append(f"cannot read tracked file {name}: {err}")
             continue
         examined += 1
-        for prefix, kind in MAGIC:
-            if head.startswith(prefix):
-                problems.append(
-                    f"{name} is tracked in Git and is {kind}; build output belongs "
-                    f"in .gitignore, and a binary that must be tracked belongs in "
-                    f"ALLOWED with its reason"
-                )
-                break
+        kind = next((kind for prefix, kind in MAGIC if head.startswith(prefix)), None)
+        if kind is None and is_python_bytecode(head):
+            kind = "compiled Python bytecode"
+        if kind is not None:
+            problems.append(
+                f"{name} is tracked in Git and is {kind}; build output belongs "
+                f"in .gitignore, and a binary that must be tracked belongs in "
+                f"ALLOWED with its reason"
+            )
 
     if examined == 0:
         print("no tracked file was examined; the check proves nothing", file=sys.stderr)

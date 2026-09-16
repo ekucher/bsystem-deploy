@@ -22,3 +22,12 @@ mocks/mock-espocrm
 mocks/mock-identity
 mocks/mock-outline
 mocks/mock-redmine
+
+# Python bytecode. scripts/ is full of Python that CI and contributors run, and
+# importing any of it as a module leaves a .pyc behind. Nothing covered it, and
+# check-artifacts.py could not have caught a committed one either: its magic
+# table knew ELF, MZ, Mach-O, zip, gzip, xz and zstd, but not bytecode. Both
+# halves of that gap are closed together — ignoring it here, and refusing a
+# tracked one there.
+__pycache__/
+*.pyc
