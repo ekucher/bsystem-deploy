@@ -1,10 +1,13 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // collect reads a normalized collection and returns it.
@@ -353,5 +356,186 @@ func TestASourceRecordDeletedAfterAllocationKeepsItsGlobalID(t *testing.T) {
 	mapping.JSON(t, &entity)
 	if entity.GlobalID != client.ID || entity.SourceID != client.SourceID {
 		t.Errorf("the mapping changed: %+v, want %s/%s", entity, client.ID, client.SourceID)
+	}
+}
+
+// An upstream that answers 200 with a payload the adapter cannot read is a
+// different failure from an upstream that is down, and a more dangerous one.
+// A refusal is easy to see. A payload that decodes to nothing, or half-decodes,
+// is the shape that produces an empty collection nobody questions, or Global
+// IDs minted against records that were never really there.
+//
+// Three things must hold, and the third is the one the P23 item is named for:
+//
+//   - the read that met the broken payload is refused, with the platform's
+//     normalized upstream error rather than the decoder's own words;
+//   - the records the broken payload did not describe are untouched — contacts
+//     come from the same upstream, over a different path, and must still read;
+//   - once the upstream is healthy again, the clients read returns the same
+//     Global IDs it returned before. Nothing was dropped, and nothing was
+//     minted a second time for a record that already had an ID.
+func TestAMalformedUpstreamPayloadCorruptsNothingAroundIt(t *testing.T) {
+	harness := ready(t)
+
+	before := map[string]string{}
+	for _, item := range collect(t, harness, "/api/v1/clients", TokenAdmin) {
+		before[item.SourceID] = item.ID
+	}
+	contactsBefore := len(collect(t, harness, "/api/v1/contacts", TokenAdmin))
+
+	// A truncated object, not a random string: it starts out looking like the
+	// response the adapter expects, so anything that decodes optimistically
+	// reads a list and then runs off the end.
+	const broken = `{"total": 3, "list": [{"id": "acc-broken", "name": "Tru`
+	harness.InjectFaultBody(t, harness.EspoCRM, "/api/v1/Account", http.StatusOK, broken)
+
+	response := harness.API(t, http.MethodGet, "/api/v1/clients", TokenAdmin, nil)
+	if response.Status == http.StatusOK {
+		t.Fatalf("GET /api/v1/clients answered 200 on an unreadable upstream payload: %s", truncate(response.Body))
+	}
+	if response.Status != http.StatusBadGateway {
+		t.Errorf("GET /api/v1/clients: status = %d, want %d (body: %s)", response.Status, http.StatusBadGateway, truncate(response.Body))
+	}
+	var failure struct {
+		Error  string `json:"error"`
+		Code   string `json:"code"`
+		Source string `json:"source"`
+	}
+	response.JSON(t, &failure)
+	if failure.Code != "upstream_unavailable" {
+		t.Errorf("error code = %q, want %q", failure.Code, "upstream_unavailable")
+	}
+	if failure.Source != "espocrm" {
+		t.Errorf("error source = %q, want %q", failure.Source, "espocrm")
+	}
+	// The decoder's complaint names the offset, the Go type and often the
+	// fragment it choked on. That is upstream payload and internal type
+	// topology, and neither belongs in an answer to an API caller.
+	body := strings.ToLower(string(response.Body))
+	for _, leak := range []string{"unmarshal", "invalid character", "unexpected end", "acc-broken", "json:"} {
+		if strings.Contains(body, leak) {
+			t.Errorf("error body leaks the decode failure (%q): %s", leak, truncate(response.Body))
+		}
+	}
+
+	// Contacts are served by the same upstream over a different path. The
+	// broken Account payload must not reach them.
+	if got := len(collect(t, harness, "/api/v1/contacts", TokenAdmin)); got != contactsBefore {
+		t.Errorf("contacts after the malformed Account payload = %d, want %d", got, contactsBefore)
+	}
+
+	harness.ResetFaults(t, harness.EspoCRM)
+
+	after := map[string]string{}
+	for _, item := range collect(t, harness, "/api/v1/clients", TokenAdmin) {
+		after[item.SourceID] = item.ID
+	}
+	if len(after) != len(before) {
+		t.Fatalf("clients after recovery = %d, want %d", len(after), len(before))
+	}
+	for sourceID, id := range before {
+		if after[sourceID] != id {
+			t.Errorf("client %s: Global ID = %q after recovery, want %q", sourceID, after[sourceID], id)
+		}
+	}
+}
+
+// Allocation on first sighting is by nature something several requests do at
+// once: a record nothing has seen before becomes visible to everything at the
+// same moment, and anything that fans out asks for it in parallel.
+//
+// Every one of those callers must come away with the same Global ID. Two IDs
+// for one source record is the failure the whole identity scheme is built to
+// prevent — audit entries, scope grants and support relations would then be
+// held against two different names for the same thing, with nothing in the
+// data saying they are the same. A 500 to the losers is the milder failure and
+// still wrong: the caller asked whether this record has an ID, the answer
+// exists, and losing a race is not the caller's problem.
+//
+// The source record is named after the test run so that it is genuinely new
+// on every run. A source_id some earlier scenario already mapped would send
+// every request down the read path and the race would never happen.
+func TestConcurrentAllocationsOfOneNewRecordAgreeOnOneGlobalID(t *testing.T) {
+	harness := ready(t)
+
+	sourceID := fmt.Sprintf("acc-concurrent-%d", time.Now().UnixNano())
+	const callers = 8
+
+	type outcome struct {
+		status   int
+		globalID string
+		body     []byte
+		err      error
+	}
+	results := make([]outcome, callers)
+	start := make(chan struct{})
+	var group sync.WaitGroup
+	for index := range callers {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			// Released together, so the requests overlap inside the platform
+			// rather than queueing behind each other's setup.
+			<-start
+			response, err := harness.Do(http.MethodPost, harness.Core+"/api/v1/global-ids", TokenAdmin, map[string]any{
+				"entity_type": "client",
+				"source":      "espocrm",
+				"source_id":   sourceID,
+			})
+			if err != nil {
+				results[index] = outcome{err: err}
+				return
+			}
+			var created struct {
+				GlobalID string `json:"global_id"`
+			}
+			_ = json.Unmarshal(response.Body, &created)
+			results[index] = outcome{status: response.Status, globalID: created.GlobalID, body: response.Body}
+		}()
+	}
+	close(start)
+	group.Wait()
+
+	allocated := map[string]int{}
+	for index, result := range results {
+		if result.err != nil {
+			t.Fatalf("caller %d: %v", index, result.err)
+		}
+		if result.status != http.StatusCreated {
+			t.Fatalf("caller %d: status = %d, want %d (body: %s)", index, result.status, http.StatusCreated, truncate(result.body))
+		}
+		if result.globalID == "" {
+			t.Fatalf("caller %d: answered %d without a global_id (body: %s)", index, result.status, truncate(result.body))
+		}
+		allocated[result.globalID]++
+	}
+	if len(allocated) != 1 {
+		t.Fatalf("%d callers allocated %d distinct Global IDs for one source record: %v", callers, len(allocated), allocated)
+	}
+
+	var globalID string
+	for id := range allocated {
+		globalID = id
+	}
+	if !strings.HasPrefix(globalID, "CL-") {
+		t.Errorf("global_id = %q, want a client ID carrying the CL- prefix", globalID)
+	}
+
+	// The ID the concurrent callers agreed on is the one the platform will
+	// answer with from now on. An ID that resolves to a different source
+	// record, or to nothing, would mean the agreement was on a value that was
+	// never stored.
+	response := harness.API(t, http.MethodGet, "/api/v1/global-ids/"+globalID, TokenAdmin, nil)
+	if response.Status != http.StatusOK {
+		t.Fatalf("GET /api/v1/global-ids/%s: status = %d, want 200 (body: %s)", globalID, response.Status, truncate(response.Body))
+	}
+	var mapping struct {
+		GlobalID string `json:"global_id"`
+		Source   string `json:"source"`
+		SourceID string `json:"source_id"`
+	}
+	response.JSON(t, &mapping)
+	if mapping.GlobalID != globalID || mapping.SourceID != sourceID || mapping.Source != "espocrm" {
+		t.Errorf("mapping = %s -> %s/%s, want %s -> espocrm/%s", mapping.GlobalID, mapping.Source, mapping.SourceID, globalID, sourceID)
 	}
 }
