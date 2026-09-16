@@ -1402,14 +1402,50 @@ Depends on: P18
 
 ## P24.1 Runtime/container review
 
-- [ ] re-evaluate user/root, `read_only`, `cap_drop`, `no-new-privileges`, tmpfs,
+- [x] re-evaluate user/root, `read_only`, `cap_drop`, `no-new-privileges`, tmpfs,
       healthchecks, restart policy, internal networks and published ports for
       every rendered base/E2E/stage service
-- [ ] ensure the hardening checker fails on an empty or unexpectedly incomplete
+      — gone through clause by clause against the three rendered stacks. What
+      the checker already enforces on every service: `no-new-privileges`,
+      `cap_drop: ALL` (with a named exempt set), no `privileged`, `read_only`
+      for a pinned set of services, no Docker socket, and no port published on
+      every interface. What was inspected rather than enforced, and found
+      sound: every image sets a non-root `USER` (mocks `65532`, Integration
+      Core `app`, HUB `101`), so no Compose `user:` override is needed and the
+      comment claiming it is now verified rather than assumed; the read-only
+      services need no tmpfs beyond HUB's `/tmp`, which the E2E stack
+      demonstrates every run; healthchecks are present and gate `depends_on`;
+      the restart policy is `unless-stopped`; data networks are `internal`.
+      One real gap came out of it and is fixed below
+- [x] ensure the hardening checker fails on an empty or unexpectedly incomplete
       rendered stack
-- [ ] ensure stage exposure checks use the variable that actually controls the
+      — closed by `deploy#12`, and extended here: the new bind-mount check has
+      its own vacuity guard, because a stack rendering no bind mount would let
+      that check pass in silence exactly as an empty stack once did
+- [x] ensure stage exposure checks use the variable that actually controls the
       stage mapping
-- [ ] check volume ownership/permissions and writable paths
+      — closed by `deploy#12`
+- [x] check volume ownership/permissions and writable paths
+      — the gap the review found. Every bind mount in every stack is `:ro`
+      today and was before this work, but nothing kept it that way, and
+      dropping `:ro` is a two-character edit that renders and runs. A bind
+      mount is a handle on the host filesystem, and these carry configuration
+      and seed data inward — an authentik blueprint, the PostgreSQL init
+      scripts — so a container that can rewrite them can change what the next
+      start believes. The checker now refuses a writable bind, with an empty
+      `WRITABLE_BINDS` allowlist for an exception that argues for itself.
+      Verified by mutation: removing `:ro` from `postgres/init` fails the
+      check, and a stack with no bind mount fails the vacuity guard
+
+Found while doing the above, and fixed with it: `.gitignore` covered no Python
+bytecode, although `scripts/` is full of Python that CI and contributors run —
+importing any of it as a module leaves an untracked `.pyc`. `check-artifacts.py`
+could not have caught a committed one either: its magic table knew ELF, MZ,
+Mach-O, zip, gzip, xz and zstd, but not bytecode. Both halves are closed.
+Bytecode has no fixed prefix to match — the magic number is a version counter
+that changes with every CPython release — so the check matches its shape
+instead, and is verified by compiling a real `.pyc` and confirming both that
+the checker rejects it and that a CRLF text file is not mistaken for one.
 
 ## P24.2 Supply chain
 

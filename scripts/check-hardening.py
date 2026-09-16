@@ -62,7 +62,15 @@ def render(paths):
     return yaml.safe_load(out.stdout)
 
 
-def inspect(label, rendered, failures):
+# Host paths that are legitimately mounted writable, each with its reason.
+# Empty: every bind mount in this repository's stacks is configuration or seed
+# data the container reads and must not alter. A writable bind is a container
+# given a handle on the host filesystem, so an addition should argue for itself
+# in a diff somebody reads.
+WRITABLE_BINDS: dict[str, str] = {}
+
+
+def inspect(label, rendered, failures, seen=None):
     """Check one rendered stack. Returns the number of services it checked."""
     services = (rendered or {}).get("services") or {}
 
@@ -105,6 +113,26 @@ def inspect(label, rendered, failures):
             if source and "docker.sock" in str(source):
                 failures.append("%s mounts the Docker socket" % where)
 
+            # A bind mount is a handle on the host filesystem. Every one in
+            # these stacks carries configuration or seed data inward — an
+            # authentik blueprint, the PostgreSQL init scripts — and a
+            # container that can rewrite those can change what the next start
+            # believes. They are all :ro today, and were before this check;
+            # what was missing is anything that keeps them that way, since
+            # dropping :ro is a two-character edit that renders and runs.
+            if not isinstance(volume, dict) or volume.get("type") != "bind":
+                continue
+            target = volume.get("target")
+            if seen is not None:
+                seen["binds"] = seen.get("binds", 0) + 1
+            if str(source) in WRITABLE_BINDS:
+                continue
+            if not volume.get("read_only"):
+                failures.append(
+                    "%s mounts %s at %s writable; add :ro, or list the source "
+                    "in WRITABLE_BINDS with the reason" % (where, source, target)
+                )
+
         for port in service.get("ports") or []:
             published = port.get("published") if isinstance(port, dict) else None
             host_ip = port.get("host_ip") if isinstance(port, dict) else None
@@ -122,6 +150,7 @@ def main(arguments):
     """Each argument is one stack; use '+' to layer a base file with overlays."""
     failures = []
     checked = []
+    seen = {}
 
     if arguments and arguments[0] == "--rendered":
         if len(arguments) != 2:
@@ -129,20 +158,34 @@ def main(arguments):
             return 2
         path = arguments[1]
         with open(path, encoding="utf-8") as handle:
-            checked.append(inspect(path, yaml.safe_load(handle), failures))
+            checked.append(inspect(path, yaml.safe_load(handle), failures, seen))
     else:
         for stack in [argument.split("+") for argument in arguments]:
-            checked.append(inspect(" + ".join(stack), render(stack), failures))
+            checked.append(inspect(" + ".join(stack), render(stack), failures, seen))
 
+    # Findings first. A vacuity guard that returns before them answers a
+    # different question than the caller asked: a stack with real hardening
+    # failures and no bind mount would print only "nothing was examined", and
+    # the failures it did find would never be seen.
     for failure in failures:
         print("FAIL: %s" % failure)
     if failures:
         return 1
-    # The service count is printed because the number is the thing a reader can
-    # sanity-check: a stack that silently shrank still says OK.
+
+    # As with the empty stack above: if no stack rendered a bind mount, the
+    # read-only check ran over nothing and its silence means nothing. Every
+    # stack this repository ships carries at least one.
+    if not seen.get("binds"):
+        print(
+            "no bind mount was examined; the read-only bind check proves nothing",
+            file=sys.stderr,
+        )
+        return 1
+    # The counts are printed because they are what a reader can sanity-check:
+    # a stack that silently shrank still says OK.
     print(
-        "OK: %d stack(s), %d service(s), pass the hardening checks"
-        % (len(checked), sum(checked))
+        "OK: %d stack(s), %d service(s), %d bind mount(s), pass the hardening checks"
+        % (len(checked), sum(checked), seen.get("binds", 0))
     )
     return 0
 
