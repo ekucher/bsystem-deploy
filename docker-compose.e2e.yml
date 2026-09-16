@@ -195,6 +195,53 @@ services:
       - "127.0.0.1:8080:8080"
     networks: [e2e-edge, e2e-data]
 
+  # A second Integration Core with Outline deliberately left unconfigured.
+  #
+  # A deployment that does not use one of the integrations is a supported
+  # configuration, not a fault, and it is the one a stage acceptance is most
+  # likely to meet. Nothing in the stack proved the platform survives it: the
+  # single core has every adapter set, so "starts without Outline" was an
+  # assumption about a deployment nobody had ever run.
+  #
+  # It shares the database on purpose. Two cores against one schema is also how
+  # the platform is meant to scale, so the stack now starts that way every run
+  # rather than only under a unit test.
+  integration-core-no-outline:
+    build:
+      context: ${INTEGRATION_CORE_CONTEXT:-../bsystem-integration-core}
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://bsystem:e2e-test-postgres-password@postgres:5432/bsystem_integration?sslmode=disable
+      NATS_URL: nats://nats:4222
+      AUTHENTIK_USERINFO_URL: http://mock-identity:9000/application/o/userinfo/
+      ESPOCRM_URL: http://mock-espocrm:8090
+      ESPOCRM_API_KEY: test-espocrm-api-key
+      REDMINE_URL: http://mock-redmine:8091
+      REDMINE_API_KEY: test-redmine-api-key
+      # OUTLINE_URL and OUTLINE_API_KEY are absent. That is the whole point of
+      # this service: do not "fix" it by adding them.
+      ADAPTER_TIMEOUT: 2s
+      ADAPTER_CIRCUIT_OPEN_FOR: 3s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-identity:
+        condition: service_healthy
+      mock-espocrm:
+        condition: service_healthy
+      mock-redmine:
+        condition: service_healthy
+      nats:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8081:8080"
+    networks: [e2e-edge, e2e-data]
+
 networks:
   e2e-edge:
   e2e-data:

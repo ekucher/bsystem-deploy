@@ -46,7 +46,11 @@ const (
 
 // Harness holds the endpoints of a running E2E stack.
 type Harness struct {
-	Core     string
+	Core string
+	// Partial is a second Integration Core running against the same database
+	// with Outline deliberately unconfigured. A deployment that leaves an
+	// integration out is supported, and this is where that is proved.
+	Partial  string
 	Identity string
 	EspoCRM  string
 	Redmine  string
@@ -72,6 +76,7 @@ func New(t *testing.T) *Harness {
 	}
 	return &Harness{
 		Core:     core,
+		Partial:  env("E2E_PARTIAL_BASE_URL", "http://127.0.0.1:8081"),
 		Identity: env("E2E_IDENTITY_URL", "http://127.0.0.1:9000"),
 		EspoCRM:  env("E2E_ESPOCRM_URL", "http://127.0.0.1:8090"),
 		Redmine:  env("E2E_REDMINE_URL", "http://127.0.0.1:8091"),

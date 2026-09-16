@@ -252,6 +252,8 @@ jobs:
           # fail rather than pass silently.
           E2E_REQUIRED: "1"
           E2E_BASE_URL: http://127.0.0.1:8080
+          # The second core, with Outline deliberately unconfigured.
+          E2E_PARTIAL_BASE_URL: http://127.0.0.1:8081
           E2E_IDENTITY_URL: http://127.0.0.1:9000
           E2E_ESPOCRM_URL: http://127.0.0.1:8090
           E2E_REDMINE_URL: http://127.0.0.1:8091

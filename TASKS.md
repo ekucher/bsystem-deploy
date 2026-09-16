@@ -1325,19 +1325,69 @@ Depends on: P20, P21, P22
 
 Add deterministic E2E scenarios for:
 
-- [ ] multi-page pagination across all supported adapters
-- [ ] upstream 429 followed by recovery
-- [ ] upstream 5xx followed by circuit-open/recovery behavior
-- [ ] malformed upstream entity without cross-record corruption
-- [ ] duplicate source identity/mapping conflict
-- [ ] source record deleted after a Global ID was allocated
-- [ ] expired/invalid human identity
-- [ ] adapter disabled/unconfigured
+- [x] multi-page pagination across all supported adapters
+      — `TestCollectionsAreWalkableByCursor`, plus the notification and search
+      pagination scenarios, which also prove a walk neither repeats nor loses
+- [x] upstream 429 followed by recovery
+      — `TestTransientUpstreamFailuresAreRetried`, one failure then success,
+      within the retry budget, so the caller never sees it
+- [x] upstream 5xx followed by circuit-open/recovery behavior
+      — `TestRetriesAreBounded`, `TestDeterministicFailuresAreNotRetried`,
+      `TestCircuitOpensUnderSustainedFailure`
+- [x] malformed upstream entity without cross-record corruption
+      — `TestAMalformedUpstreamPayloadCorruptsNothingAroundIt`. An upstream
+      answering 200 with an unreadable payload is worse than one that is down,
+      because the refusal is invisible. The scenario pins the normalized 502,
+      that the decoder's own words do not travel with it, that contacts (same
+      upstream, different path) still read, and that after recovery every
+      client carries the Global ID it carried before
+- [x] duplicate source identity/mapping conflict
+      — `TestNormalizedEntitiesAndGlobalIDStability`, `TestUserGlobalIDIsStable`,
+      `TestServiceGlobalIDIsStable`, `TestServerRegistrationIsIdempotent`
+- [x] source record deleted after a Global ID was allocated
+      — `TestASourceRecordDeletedAfterAllocationKeepsItsGlobalID`
+- [x] expired/invalid human identity
+      — `TestAuthenticationRejections`, and `TestRejectionsNeverLeakSecretsOrTopology`
+      for what the refusal is allowed to say
+- [x] adapter disabled/unconfigured
+      — `TestACoreWithAnUnconfiguredAdapterStartsAndSaysSo`. This needed a
+      stack change, not just a scenario: the E2E stack now runs a second
+      Integration Core from the same image against the same database with
+      `OUTLINE_URL` deliberately absent. Core has integration tests for the
+      refusal, but nothing had ever run the deployment — "the platform starts
+      without Outline" was an assumption about a configuration no stack had
+      ever brought up, and it is the configuration a stage acceptance is most
+      likely to meet
 - [ ] NATS unavailable and recovery
+      — not covered, and not coverable from the harness as it stands. The
+      scenarios talk HTTP and the NATS wire protocol to a running stack; they
+      cannot stop and start a container. Proving *recovery* in particular needs
+      container lifecycle control in the E2E job rather than a new assertion.
+      Readiness already distinguishes it (`nats: degraded` without making the
+      platform unready), so what is missing is the demonstration, not the
+      behavior
 - [ ] PostgreSQL unavailable during readiness/startup where practical
-- [ ] concurrent reads of the same newly discovered source records
-- [ ] authorization scope changed between requests
-- [ ] prove an E2E-required suite cannot pass by skipping all scenarios
+      — same limit, and "where practical" is doing real work in that line.
+      Readiness answers 503 with `database: error` when the pool cannot ping,
+      but showing it means taking PostgreSQL away from a running stack
+- [x] concurrent reads of the same newly discovered source records
+      — `TestConcurrentAllocationsOfOneNewRecordAgreeOnOneGlobalID`. Eight
+      callers released together against a source record named after the run.
+      Non-vacuous against the code as it stood before P20.2: without the
+      unique-violation fallback in `CreateGlobalEntity` the losers answer 500
+- [x] authorization scope changed between requests
+      — `TestARevokedScopeStopsWorkingOnTheNextRequest`. True by construction
+      today (the evaluator holds no cache), which is exactly why it is pinned:
+      the obvious way to make the platform faster is a cache, and one added
+      without this test keeps a revoked scope working with nothing failing and
+      nothing logged
+- [x] prove an E2E-required suite cannot pass by skipping all scenarios
+      — `TestTheStackRequirementGuard`
+
+Two items are left open above rather than quietly dropped. Both need the E2E
+job to stop and start containers mid-suite, which is a change to how the
+scenarios are run, not another assertion. Recorded here so the gap is visible
+instead of being inferred from an unchecked box.
 
 Definition of Done:
 - scenarios are deterministic and do not require production credentials;

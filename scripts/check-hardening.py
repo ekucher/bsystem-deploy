@@ -37,6 +37,7 @@ CAPABILITY_EXEMPT = {"authentik-server", "authentik-worker"}
 # script enforces.
 READ_ONLY = {
     "integration-core",
+    "integration-core-no-outline",
     "hub",
     "mock-identity",
     "mock-espocrm",
