@@ -2,7 +2,10 @@
 //
 // The scenarios run against the stack defined in docker-compose.e2e.yml. They
 // are skipped unless E2E_BASE_URL points at a running Integration Core, so
-// `go test ./...` stays safe on a machine with no stack up.
+// `go test ./...` stays safe on a machine with no stack up. Where a skip would
+// be a lie — CI, where the stack is up and exercising it is the point — set
+// E2E_REQUIRED and the suite refuses to start rather than reporting success
+// without running a scenario. See required_test.go.
 //
 // The package deliberately has no third-party dependencies: it talks plain
 // HTTP to the platform and speaks the NATS wire protocol directly.
