@@ -26,9 +26,17 @@ source systems BSYSTEM reads and never writes.
 
 A source system is optional in the literal sense that the platform starts and
 serves without it: the adapter stays disabled when its URL is empty, and the
-endpoints it backs answer with an empty collection rather than an error. An
-acceptance that means to test CRM data obviously needs EspoCRM configured — the
-point is that a missing Redmine does not stop you accepting the CRM path.
+rest of the platform works. The endpoints that adapter backs answer **`503
+upstream_unavailable`**, for collections as well as for detail reads.
+
+That is deliberate, and the tempting alternative would be worse: an empty
+collection would tell an operator the platform knows of no clients, when what
+is true is that nobody has told it where to look. A missing integration must
+not be indistinguishable from missing data.
+
+So a missing Redmine does not stop you accepting the CRM path — but expect
+`503` from `/api/v1/projects` and `/api/v1/issues` while it is missing, not an
+empty list. The smoke runner accepts that code for exactly this reason.
 
 NATS is the one degraded-but-alive dependency: `/readyz` reports `nats:
 degraded` and the platform keeps serving. Events are not queued while it is
