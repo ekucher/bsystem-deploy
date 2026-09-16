@@ -678,34 +678,56 @@ ADRs:
 
 Priority: MEDIUM
 
-- [ ] `.editorconfig`
-- [ ] `.gitattributes`
-- [ ] `.gitignore`
-- [ ] CONTRIBUTING.md
-- [ ] PR template
-- [ ] issue templates
-- [ ] conventional commit guidance
-- [ ] release policy
-- [ ] changelog policy
-- [ ] developer setup
+- [x] `.editorconfig` — all four repositories
+- [x] `.gitattributes` — LF normalization, and lockfiles marked generated
+- [x] `.gitignore` — audited and deduplicated
+- [x] CONTRIBUTING.md — per repository, since the toolchains differ
+- [x] PR template — asks how a change was verified, not whether tests pass
+- [x] issue templates — blank issues disabled, security findings routed to the
+      private process
+- [x] conventional commit guidance
+- [x] release policy — stated per repository rather than invented
+- [x] changelog policy — only the design system has one, because only it
+      publishes a package
+- [x] developer setup
 
 Do not add CODEOWNERS unless ownership is known.
+
+CODEOWNERS was not added. Ownership is not known, and a file claiming
+otherwise would route reviews to people who never agreed to them.
 
 # P16 — Performance and resilience
 
 Priority: MEDIUM
 
-- [-] benchmark Global ID/mapping paths
-- [-] inspect DB indexes
-- [-] inspect N+1 adapter behavior
-- [-] bounded concurrency
-- [-] graceful shutdown
-- [-] server read/write/idle timeouts
-- [-] DB pool config
-- [-] fake-upstream load-test harness
-- [-] measured baseline documentation
+- [x] benchmark Global ID/mapping paths — plus redaction, prompt assembly,
+      search and cursors; measured, with the machine recorded
+- [x] inspect DB indexes — four added in migration `009`, and the rejected
+      candidates recorded with them, including one that would have duplicated
+      a primary key
+- [x] inspect N+1 adapter behavior — every listing endpoint was N+1, two
+      transactions per row for contacts and issues; now batched
+- [x] bounded concurrency — adapter health probes ran in sequence holding the
+      registry lock, so a readiness check cost the sum of every adapter's
+      timeout
+- [x] graceful shutdown — SIGTERM was killing requests in flight, which during
+      a rolling deploy looks like an intermittent platform fault
+- [x] server read/write/idle timeouts — the write timeout was shorter than the
+      AI provider bound, so an AI request could not complete
+- [x] DB pool config — explicit bounds, overridable, with the configured size
+      bounded after CodeQL found the int32 conversion wrapping
+- [x] fake-upstream load-test harness — `bsystem-deploy/loadtest/`
+- [x] measured baseline documentation —
+      `bsystem-integration-core/docs/PERFORMANCE.md`
 
 Do not invent performance numbers.
+
+None were invented. Every figure in `PERFORMANCE.md` was measured, the machine
+is recorded with them, and the document states plainly that no end-to-end
+throughput figure exists — producing an honest one needs production-class
+hardware, realistic data volumes and real upstreams, and the platform has none
+of the three. The load harness is a regression tool whose absolute numbers
+describe four mock upstreams.
 
 # BLOCKED — real environment acceptance
 
