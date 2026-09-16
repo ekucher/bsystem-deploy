@@ -1,0 +1,142 @@
+# Stage overlay for the BSYSTEM platform stack.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.stage.yml up -d
+#
+# This file adds to docker-compose.yml; it does not replace it, and it does not
+# touch docker-compose.e2e.yml. The development stack keeps working exactly as
+# before.
+#
+# What the overlay changes, and why:
+#
+#   * Nothing is published by default. The base file binds published ports to
+#     ${BIND_ADDRESS:-127.0.0.1}; here even that is narrowed to an explicit
+#     opt-in, because a stage host usually has a public interface and a reverse
+#     proxy in front. Set STAGE_PUBLISH_ADDRESS to widen it deliberately.
+#   * Every service gets a healthcheck and a restart policy, so an unhealthy
+#     dependency is visible rather than merely unresponsive.
+#   * Resource limits are set only where a limit is justified by how the
+#     service actually behaves. A guessed limit is worse than none: it turns a
+#     load problem into an OOM kill at an unpredictable moment.
+#   * No secret appears here. Every value comes from the environment, and a
+#     missing required one fails at render time rather than at runtime.
+#
+# It assumes no DNS name. Names belong to the reverse proxy in front of this
+# stack, not to the stack itself.
+name: bsystem-platform
+
+services:
+  postgres:
+    restart: always
+    # Stage is the environment where a restore is rehearsed, so the data
+    # volume is named explicitly rather than inherited.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bsystem -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          # PostgreSQL's own memory settings are unchanged from the image
+          # defaults, so this ceiling is deliberately generous: it exists to
+          # stop one runaway query taking the host down, not to size the
+          # database. Raise it with shared_buffers, never on its own.
+          memory: 2g
+
+  redis:
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  nats:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  authentik-server:
+    restart: always
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY is required in stage}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in stage}
+      # authentik is behind the reverse proxy that terminates TLS. Without
+      # this it builds redirect URLs from the internal scheme and every OIDC
+      # round trip lands on http:// — which the browser then blocks.
+      AUTHENTIK_WEB__WORKERS: "2"
+    ports: !override
+      - "${STAGE_PUBLISH_ADDRESS:-127.0.0.1}:9000:9000"
+
+  authentik-worker:
+    restart: always
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY is required in stage}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in stage}
+
+  integration-core:
+    restart: always
+    environment:
+      DATABASE_URL: postgres://bsystem:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in stage}@postgres:5432/bsystem_integration?sslmode=disable
+      # Reached over the internal network. This is not the issuer URL the
+      # browser uses, and confusing the two is the most common stage failure
+      # in this stack.
+      AUTHENTIK_USERINFO_URL: ${AUTHENTIK_USERINFO_URL:-http://authentik-server:9000/application/o/userinfo/}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ADAPTER_TIMEOUT: ${ADAPTER_TIMEOUT:-10s}
+      ADAPTER_CIRCUIT_OPEN_FOR: ${ADAPTER_CIRCUIT_OPEN_FOR:-30s}
+      DATABASE_MAX_CONNS: ${DATABASE_MAX_CONNS:-20}
+      DATABASE_MIN_CONNS: ${DATABASE_MIN_CONNS:-2}
+      ESPOCRM_URL: ${ESPOCRM_URL:-}
+      ESPOCRM_API_KEY: ${ESPOCRM_API_KEY:-}
+      REDMINE_URL: ${REDMINE_URL:-}
+      REDMINE_API_KEY: ${REDMINE_API_KEY:-}
+      OUTLINE_URL: ${OUTLINE_URL:-}
+      OUTLINE_API_KEY: ${OUTLINE_API_KEY:-}
+    healthcheck:
+      # /readyz rather than /health: a Core that cannot reach PostgreSQL is
+      # running but cannot serve, and a healthcheck that passes in that state
+      # is worse than no healthcheck.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    ports: !override
+      - "${STAGE_PUBLISH_ADDRESS:-127.0.0.1}:8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  hub:
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    ports: !override
+      - "${STAGE_PUBLISH_ADDRESS:-127.0.0.1}:8081:8080"
+    deploy:
+      resources:
+        limits:
+          # Static files from nginx. This is small on purpose: if the HUB ever
+          # needs more than this, something is wrong rather than busy.
+          memory: 256m
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -118,7 +118,7 @@ Priority: HIGH
 ## P2.1 OpenAPI
 
 - [x] inventory all active endpoints
-- [x] sync `docs/openapi.yaml`
+- [x] sync `bsystem-integration-core/docs/openapi.yaml`
 - [x] common Error schema
 - [x] Me/Module/Client/Contact/Project/Issue/Document schemas
 - [x] pagination schema — the bounded `limit` parameter is documented as the
@@ -340,7 +340,7 @@ What is required from owner: a decision on the registry, a publishing token
 Safe work already completed: Changesets configured with a bump policy,
   CHANGELOG.md, package metadata and `publishConfig` for GitHub Packages,
   test sources excluded from the build output, consumer `.npmrc` and
-  dependency instructions, and `docs/RELEASING.md` recording exactly what
+  dependency instructions, and `bsystem-design-system/docs/RELEASING.md` recording exactly what
   remains. Publishing is one configuration step, not a project.
 Related commit/PR: ekucher/bsystem-design-system#3
 ```
@@ -803,3 +803,151 @@ Migration changes
 Required owner actions
 Recommended production acceptance sequence
 ```
+
+# P17 — Stage readiness and acceptance preparation
+
+Priority: HIGH
+
+Goal: when real stage credentials and URLs arrive, the owner runs a controlled
+acceptance with minimal manual work. Nothing here deploys, requests production
+credentials, or makes a destructive change.
+
+## P17.1 Stage environment contract
+
+- [x] `docs/STAGE-ACCEPTANCE.md`
+- [x] required services and which are optional
+- [x] every environment variable classified: required/optional, secret/public
+- [x] no real secret value committed
+- [x] network paths, including the Core→authentik direction that trips people
+- [x] DNS placeholders on reserved documentation domains
+- [x] health and readiness URLs, including which need a service token
+- [x] rollback assumptions
+- [x] backup prerequisites
+
+## P17.2 Environment validation
+
+- [x] `scripts/stage-preflight.sh`
+- [x] `scripts/stage-preflight.ps1`
+- [x] required variables present; placeholders rejected
+- [x] URL format, DNS resolution, bounded TCP connect
+- [x] required local files, Docker and Compose availability, stage render
+- [x] secrets reported by length, never by value
+- [x] non-zero exit on a blocking failure
+- [x] fixture tests, including one that fails if a secret is ever printed
+
+## P17.3 Stage smoke runner
+
+- [x] `scripts/stage-smoke.sh`
+- [x] `scripts/stage-smoke.ps1`
+- [x] `/health`, `/readyz`, `/metrics`, HUB `/healthz`, OIDC discovery
+- [x] human API, machine API, adapter health
+- [x] PostgreSQL and NATS through readiness rather than probed directly
+- [x] anonymous callers asserted to be rejected
+- [x] every check a GET; nothing is created, updated or deleted
+- [x] missing token SKIPs its section with a reason instead of failing the run
+- [x] no credential in output or report
+
+## P17.4 Acceptance report
+
+- [x] `artifacts/stage-acceptance.json`
+- [x] `artifacts/stage-acceptance.md`
+- [x] timestamps, per-repository commit, service, check, PASS/FAIL/SKIP/BLOCKED
+- [x] duration and request id for correlation with the audit trail
+- [x] safe diagnostics only
+
+## P17.5 Real-adapter contract readiness
+
+- [x] `bsystem-integration-core/docs/adapters/ESPOCRM-STAGE.md`
+- [x] `bsystem-integration-core/docs/adapters/REDMINE-STAGE.md`
+- [x] `bsystem-integration-core/docs/adapters/OUTLINE-STAGE.md`
+- [x] base URL, auth header, endpoints, pagination, envelope, fields consumed
+- [x] timeout, retry and circuit behaviour
+- [x] behaviour when an optional field is absent
+- [x] version-sensitive assumptions listed per adapter
+- [x] no claim of live compatibility anywhere
+
+## P17.6 authentik stage checklist
+
+- [x] `docs/AUTHENTIK-STAGE.md`
+- [x] application, provider, public PKCE client, exact issuer
+- [x] redirect and logout URIs, with why wildcards are refused
+- [x] scopes, groups, claims, service identity expectations
+- [x] MFA, customer and service identity test checklists
+- [x] no client secret anywhere
+
+## P17.7 Tenant-isolation acceptance matrix
+
+- [x] `docs/TENANT-ISOLATION-MATRIX.md`
+- [x] nine actors against ten resources, human and machine surfaces
+- [x] ALLOW / DENY / SCOPED / N/A derived from seeded grants and route declarations
+- [x] customer ALLOW cases marked BLOCKED rather than invented
+- [x] `404` not `403` for a resource the caller may not learn exists
+
+## P17.8 Data mapping audit tool
+
+- [x] `bsystem-integration-core/cmd/mapping-audit`
+- [x] invalid prefixes, unregistered types, one record mapped twice
+- [x] references to Global IDs that do not resolve
+- [x] records with no owning client, reported as warnings
+- [x] read-only: every statement a SELECT, no source system contacted
+- [x] identifiers and fixed details only; tests fail if that changes
+
+## P17.9 Migration readiness
+
+- [x] `bsystem-integration-core/docs/MIGRATION-READINESS.md`
+- [x] order, tables and indexes added, backward compatibility
+- [x] duration classified rather than invented
+- [x] rollback strategy, and where locks would matter
+- [x] confirmed no migration drops, rewrites or deletes
+- [x] CI applies every migration to an empty database
+- [x] CI starts the application against the migrated schema
+
+## P17.10 Backup and restore runbook
+
+- [x] `docs/BACKUP-RESTORE.md`
+- [x] what to back up and what not to
+- [x] verification by restoring, not by inspecting
+- [x] stop/start ordering, with why the Core must stop first
+- [x] acceptance criteria after a restore
+- [x] no external backup target configured
+
+## P17.11 Release manifest
+
+- [x] `scripts/release-manifest.sh`
+- [x] repository, branch, commit, dirty state per repository
+- [x] schema level, OpenAPI version and hash, design system version
+- [x] `bsystem_build_info` and `bsystem_schema_migrations_applied` on `/metrics`
+
+## P17.12 Stage Compose profile
+
+- [x] `docker-compose.stage.yml` as an overlay, leaving dev and E2E untouched
+- [x] no hardcoded secret; required variables fail at render
+- [x] no public bind unless `STAGE_PUBLISH_ADDRESS` says so
+- [x] healthchecks, restart policies, internal networks, volumes
+- [x] resource limits only where justified
+
+## P17.13 CI validation for stage assets
+
+- [x] stage Compose renders, and is hardening-checked as part of its stack
+- [x] shell scripts parse and pass shellcheck
+- [x] PowerShell scripts parse
+- [x] `scripts/check-stage-secrets.py` — no committed secret-like value
+- [x] `scripts/check-doc-links.py` — every referenced path exists
+- [x] migration-from-zero test runs
+- [x] fixture tests for preflight and smoke
+
+## P17.14 OpenAPI acceptance examples
+
+- [x] 2xx examples for every endpoint an acceptance walks
+- [x] 401 documented everywhere; 403 where a permission or scope can reject;
+      404 where a single resource is addressed
+- [x] a contract test fails on a documented rejection the platform cannot return
+- [x] example hosts restricted to reserved documentation domains
+
+## P17.15 Stage handoff
+
+- [x] `docs/STAGE-HANDOFF.md`
+- [x] what is autonomous, what the owner must supply
+- [x] execution order, with PowerShell and shell command sequences
+- [x] expected outcomes, rollback, acceptance checklist
+- [x] known limitations and the 14 remaining blocked items

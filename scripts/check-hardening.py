@@ -22,19 +22,26 @@ import yaml
 CAPABILITY_EXEMPT = {"authentik-server", "authentik-worker"}
 
 
-def render(path):
-    out = subprocess.run(
-        ["docker", "compose", "-f", path, "config"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+def render(paths):
+    """Render one stack. Several paths are layered, as `docker compose -f a -f b`.
+
+    An overlay is not a complete stack on its own: docker-compose.stage.yml
+    renders to nothing useful alone, and checking it alone would either error
+    or pass vacuously. What has to be hardened is the composition that actually
+    runs.
+    """
+    argv = ["docker", "compose"]
+    for path in paths:
+        argv += ["-f", path]
+    argv.append("config")
+    out = subprocess.run(argv, check=True, capture_output=True, text=True)
     return yaml.safe_load(out.stdout)
 
 
-def check(path, failures):
-    for name, service in sorted(render(path).get("services", {}).items()):
-        where = "%s: %s" % (path, name)
+def check(paths, failures):
+    label = " + ".join(paths)
+    for name, service in sorted(render(paths).get("services", {}).items()):
+        where = "%s: %s" % (label, name)
 
         if "no-new-privileges:true" not in (service.get("security_opt") or []):
             failures.append("%s does not set no-new-privileges" % where)
@@ -68,15 +75,17 @@ def check(path, failures):
                 )
 
 
-def main(paths):
+def main(arguments):
+    """Each argument is one stack; use '+' to layer a base file with overlays."""
+    stacks = [argument.split("+") for argument in arguments]
     failures = []
-    for path in paths:
-        check(path, failures)
+    for stack in stacks:
+        check(stack, failures)
     for failure in failures:
         print("FAIL: %s" % failure)
     if failures:
         return 1
-    print("OK: %d compose file(s) pass the hardening checks" % len(paths))
+    print("OK: %d stack(s) pass the hardening checks" % len(stacks))
     return 0
 
 
