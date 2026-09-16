@@ -628,27 +628,37 @@ No real LLM credentials required.
 
 Priority: CONTINUOUS
 
-- [-] API
-- [-] RBAC
-- [-] SCOPES
-- [-] GLOBAL-IDS
-- [-] EVENTS
-- [-] ADAPTERS
-- [-] OBSERVABILITY
-- [-] SECURITY
-- [-] DEPLOYMENT
-- [-] DEVELOPMENT
-- [-] AI
+- [x] API — `bsystem-integration-core/docs/API.md` and `openapi.yaml`
+- [x] RBAC — `AUTHORIZATION.md`, with the group-to-role-to-permission table
+- [x] SCOPES — `AUTHORIZATION.md` and `adr/ADR-005`
+- [x] GLOBAL-IDS — `GLOBAL-IDS.md`
+- [x] EVENTS — `EVENTS.md`, verified against the mapping table in code
+- [x] ADAPTERS — `ADAPTERS.md`
+- [x] OBSERVABILITY — `OBSERVABILITY.md` and `bsystem-deploy/observability/`
+- [x] SECURITY — `bsystem-deploy/SECURITY.md`
+- [x] DEPLOYMENT — `bsystem-deploy/docs/DEPLOYMENT.md`
+- [x] DEVELOPMENT — `bsystem-integration-core/docs/DEVELOPMENT.md`
+- [x] AI — `AI-GATEWAY.md`, with the principle in `AI-GATEWAY-CONTRACT.md`
+
+Every repository now has a `docs/README.md` index, and each marks its P0
+documents as historical with the rule that current documents win.
+
+Three documents in the HUB described the platform rather than the HUB, having
+been written before the Integration Core existed. One had drifted into
+claiming the HUB decides what a user may do, which is backwards. They are now
+pointers that say so explicitly: a platform concept is documented where it is
+enforced, because a second copy drifts and a reader cannot tell which is
+current.
 
 ADRs:
 
-- [-] retry/circuit policy
-- [-] pagination convention
-- [-] normalized errors
-- [-] customer isolation boundary
-- [-] Design System distribution
-- [-] search provider architecture
-- [-] AI routing policy
+- [x] retry/circuit policy — `adr/ADR-006`
+- [x] pagination convention — `adr/ADR-007`
+- [x] normalized errors — `adr/ADR-008`
+- [x] customer isolation boundary — `adr/ADR-005`
+- [x] Design System distribution — `bsystem-design-system/docs/adr/ADR-011`
+- [x] search provider architecture — `adr/ADR-009`
+- [x] AI routing policy — `adr/ADR-010`
 
 # P15 — Repository hygiene
 
