@@ -1068,11 +1068,15 @@ that it is no longer in the tree and cannot return unnoticed.
 Delivered in `bsystem-integration-core#10` and `bsystem-deploy#13`.
 
 One thing was found on the way and is fixed in the same change: the commit that
-added this P18-P27 backlog turned `main` red. `check-doc-links.py` flagged
-`docs/openapi.yaml` in P22, which names a file in the Integration Core and
-resolves against this repository, where there is none. Corrected to
-`bsystem-integration-core/docs/openapi.yaml`. The checker was right and its own
-comment had already described this exact ambiguity.
+added this P18-P27 backlog turned `main` red. `check-doc-links.py` flagged the
+OpenAPI document referenced in P22 by a bare `docs/`-rooted path: that file
+lives in the Integration Core, and the reference resolved against this
+repository, where there is none. P22 now names the repository that owns it.
+
+Quoting the broken path in this note reintroduced the finding, because the
+checker reads backticked paths wherever they appear — including in prose about
+the fix. It is right to: a path in a document is a claim that the path exists,
+and a document explaining a correction is no exception.
 
 Definition of Done:
 - no accidental build artefact remains tracked;
