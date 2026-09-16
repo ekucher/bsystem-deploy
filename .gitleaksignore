@@ -1,0 +1,45 @@
+# Reviewed gitleaks findings.
+#
+# Each line is a fingerprint: commit, file, rule and line. That specificity is
+# the point — an entry here cannot mask a finding anywhere else, in any other
+# commit, or even on a different line of the same file. A broad allowlist for
+# the test directory would turn off the check that catches a real credential
+# committed there later, which is the opposite of what a security scan is for.
+#
+# Every entry below is the same thing: a fabricated fixture value in
+# scripts/tests/stage-scripts.test.sh, the test that proves the stage preflight
+# and smoke runner never print a secret. The test needs values that look like
+# credentials, because a fixture of "hunter2" would pass a leak assertion that
+# a real-looking value fails. Nothing here was ever issued and nothing grants
+# access to anything.
+#
+# gitleaks and GitGuardian were both right to flag them: a committed
+# 32-character random-looking literal is indistinguishable from a real
+# credential, and no scanner can know otherwise. So the literals are gone from
+# the working tree — the fixtures are now generated per run from /dev/urandom,
+# which also makes the leak assertions stronger, since each run searches for a
+# string that never existed before.
+#
+# These entries exist only because the commit that introduced the literals is
+# already published, and rewriting published history is not something to do for
+# a false positive. No future commit can carry these values.
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:34
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:35
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:64
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:77
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:86
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:87
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:95
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:96
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:112
+
+65d6889fd2432f3872e8f2b8257b346ed40a4622:scripts/tests/stage-scripts.test.sh:generic-api-key:113

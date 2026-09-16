@@ -29,10 +29,20 @@ repo_field() {
 }
 
 repo_object() {
-  local name="$1" dir="$2"
+  local name="$1" dir="$2" dirty
+  # "dirty" is a JSON boolean, so an unavailable repository cannot borrow the
+  # "unavailable" string the other fields use: it would emit a bare token and
+  # the document would not parse. This only shows up where a sibling is not
+  # checked out — which is every CI run, and was not reproduced locally until
+  # a test pinned it.
+  if [ -d "$dir/.git" ]; then
+    dirty="$(repo_field "$dir" dirty)"
+  else
+    dirty="null"
+  fi
   printf '    "%s": {"commit": "%s", "branch": "%s", "committed_at": "%s", "dirty": %s}' \
     "$name" "$(repo_field "$dir" commit)" "$(json_string "$(repo_field "$dir" branch)")" \
-    "$(repo_field "$dir" date)" "$(repo_field "$dir" dirty)"
+    "$(repo_field "$dir" date)" "$dirty"
 }
 
 # The schema level this build would apply — read from the migration files the

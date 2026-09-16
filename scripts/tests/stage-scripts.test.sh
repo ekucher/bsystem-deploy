@@ -26,13 +26,30 @@ contains() {
   return 1
 }
 
+# Fixture values are generated per run rather than written into this file.
+#
+# A literal 32-character random-looking string committed to a repository is
+# indistinguishable from a real credential, and gitleaks and GitGuardian are
+# right to flag it — they cannot know it is a fixture. Generating the values
+# keeps the scanners honest instead of teaching them to ignore this file, and
+# it makes the leak assertions stronger: each run looks for a string that has
+# never existed anywhere before.
+random_value() {
+  LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "$1"
+}
+
+FIXTURE_DB_PASSWORD="$(random_value 32)"
+FIXTURE_AUTHENTIK_KEY="$(random_value 52)"
+FIXTURE_HUMAN_TOKEN="$(random_value 24)"
+FIXTURE_SERVICE_TOKEN="$(random_value 24)"
+
 # --- preflight --------------------------------------------------------------
 
 echo "== stage-preflight.sh"
 
-cat > "$WORK/env.good" <<'ENV'
-POSTGRES_PASSWORD=g7Qx2vLp9SdKmR4tYbN8wZ3aFcHjUe6X
-AUTHENTIK_SECRET_KEY=Ku3pS9vLmQ2xTz8RbY4nWd6FgHjKlPoIuYtReWqAsDfGhJkLzX
+cat > "$WORK/env.good" <<ENV
+POSTGRES_PASSWORD=$FIXTURE_DB_PASSWORD
+AUTHENTIK_SECRET_KEY=$FIXTURE_AUTHENTIK_KEY
 VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub/
 VITE_OIDC_CLIENT_ID=hub-public-client
 BIND_ADDRESS=127.0.0.1
@@ -43,12 +60,12 @@ check "$?" "0" "a complete configuration passes"
 
 # The whole point of the script's discipline: a secret's value must not appear
 # in output that people paste into tickets.
-if contains "$output" "g7Qx2vLp9SdKmR4tYbN8wZ3aFcHjUe6X"; then
+if contains "$output" "$FIXTURE_DB_PASSWORD"; then
   bad "POSTGRES_PASSWORD value leaked into preflight output"
 else
   ok "the database password never appears in output"
 fi
-if contains "$output" "Ku3pS9vLmQ2xTz8RbY4nWd6FgHjKlPoIuYtReWqAsDfGhJkLzX"; then
+if contains "$output" "$FIXTURE_AUTHENTIK_KEY"; then
   bad "AUTHENTIK_SECRET_KEY value leaked into preflight output"
 else
   ok "the authentik secret key never appears in output"
@@ -59,9 +76,9 @@ else
   bad "a secret should be reported by length"
 fi
 
-cat > "$WORK/env.placeholder" <<'ENV'
+cat > "$WORK/env.placeholder" <<ENV
 POSTGRES_PASSWORD=CHANGE_ME_USE_A_LONG_RANDOM_PASSWORD
-AUTHENTIK_SECRET_KEY=Ku3pS9vLmQ2xTz8RbY4nWd6FgHjKlPoIuYtReWqAsDfGhJkLzX
+AUTHENTIK_SECRET_KEY=$FIXTURE_AUTHENTIK_KEY
 VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub/
 VITE_OIDC_CLIENT_ID=hub-public-client
 ENV
@@ -73,8 +90,8 @@ else
   bad "the placeholder should be named"
 fi
 
-cat > "$WORK/env.shortkey" <<'ENV'
-POSTGRES_PASSWORD=g7Qx2vLp9SdKmR4tYbN8wZ3aFcHjUe6X
+cat > "$WORK/env.shortkey" <<ENV
+POSTGRES_PASSWORD=$FIXTURE_DB_PASSWORD
 AUTHENTIK_SECRET_KEY=tooshort
 VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub/
 VITE_OIDC_CLIENT_ID=hub-public-client
@@ -82,18 +99,18 @@ ENV
 output="$(env -i PATH="$PATH" HOME="$HOME" NO_COLOR=1 ENV_FILE="$WORK/env.shortkey" SKIP_NETWORK=1 SKIP_DOCKER=1 bash scripts/stage-preflight.sh 2>&1)"
 check "$?" "1" "a short authentik key blocks the preflight"
 
-cat > "$WORK/env.noslash" <<'ENV'
-POSTGRES_PASSWORD=g7Qx2vLp9SdKmR4tYbN8wZ3aFcHjUe6X
-AUTHENTIK_SECRET_KEY=Ku3pS9vLmQ2xTz8RbY4nWd6FgHjKlPoIuYtReWqAsDfGhJkLzX
+cat > "$WORK/env.noslash" <<ENV
+POSTGRES_PASSWORD=$FIXTURE_DB_PASSWORD
+AUTHENTIK_SECRET_KEY=$FIXTURE_AUTHENTIK_KEY
 VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub
 VITE_OIDC_CLIENT_ID=hub-public-client
 ENV
 output="$(env -i PATH="$PATH" HOME="$HOME" NO_COLOR=1 ENV_FILE="$WORK/env.noslash" SKIP_NETWORK=1 SKIP_DOCKER=1 bash scripts/stage-preflight.sh 2>&1)"
 check "$?" "1" "an issuer without a trailing slash blocks the preflight"
 
-cat > "$WORK/env.outline" <<'ENV'
-POSTGRES_PASSWORD=g7Qx2vLp9SdKmR4tYbN8wZ3aFcHjUe6X
-AUTHENTIK_SECRET_KEY=Ku3pS9vLmQ2xTz8RbY4nWd6FgHjKlPoIuYtReWqAsDfGhJkLzX
+cat > "$WORK/env.outline" <<ENV
+POSTGRES_PASSWORD=$FIXTURE_DB_PASSWORD
+AUTHENTIK_SECRET_KEY=$FIXTURE_AUTHENTIK_KEY
 VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub/
 VITE_OIDC_CLIENT_ID=hub-public-client
 OUTLINE_URL=https://wiki.acceptance.invalid
@@ -108,12 +125,12 @@ fi
 
 # A .env is untrusted input. Sourcing one would execute it, which is an odd
 # thing for a validator to do to a file it is about to call untrusted.
-cat > "$WORK/env.hostile" <<'ENV'
-POSTGRES_PASSWORD=g7Qx2vLp9SdKmR4tYbN8wZ3aFcHjUe6X
-AUTHENTIK_SECRET_KEY=Ku3pS9vLmQ2xTz8RbY4nWd6FgHjKlPoIuYtReWqAsDfGhJkLzX
+cat > "$WORK/env.hostile" <<ENV
+POSTGRES_PASSWORD=$FIXTURE_DB_PASSWORD
+AUTHENTIK_SECRET_KEY=$FIXTURE_AUTHENTIK_KEY
 VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub/
 VITE_OIDC_CLIENT_ID=hub-public-client
-EVIL=$(touch /tmp/bsystem-preflight-executed-me)
+EVIL=\$(touch /tmp/bsystem-preflight-executed-me)
 ENV
 rm -f /tmp/bsystem-preflight-executed-me
 env -i PATH="$PATH" HOME="$HOME" NO_COLOR=1 ENV_FILE="$WORK/env.hostile" SKIP_NETWORK=1 SKIP_DOCKER=1 bash scripts/stage-preflight.sh >/dev/null 2>&1
@@ -163,8 +180,8 @@ PY
 FAKE_PID=$!
 sleep 2
 
-SECRET_HUMAN="human-token-3f9a2b7c1e"
-SECRET_SERVICE="service-token-8d4e6a0b5c"
+SECRET_HUMAN="$FIXTURE_HUMAN_TOKEN"
+SECRET_SERVICE="$FIXTURE_SERVICE_TOKEN"
 
 output="$(ARTIFACTS_DIR="$WORK/art" CORE_URL=http://127.0.0.1:18080 HUB_URL=http://127.0.0.1:18081 \
   BSYSTEM_HUMAN_TOKEN="$SECRET_HUMAN" BSYSTEM_SERVICE_TOKEN="$SECRET_SERVICE" TIMEOUT=5 \
@@ -219,6 +236,27 @@ fi
 output="$(ARTIFACTS_DIR="$WORK/art3" CORE_URL=http://127.0.0.1:59999 HUB_URL=http://127.0.0.1:59998 TIMEOUT=2 \
   bash scripts/stage-smoke.sh 2>&1)"
 check "$?" "1" "an unreachable platform fails the run"
+
+# --- release manifest -------------------------------------------------------
+
+echo
+echo "== release-manifest.sh"
+
+if ./scripts/release-manifest.sh | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
+  ok "the manifest is valid JSON with the sibling repositories present"
+else
+  bad "the manifest is not valid JSON with the sibling repositories present"
+fi
+
+# CI checks out this repository alone, so every sibling is absent there. The
+# first CI run produced `"dirty": unavailable` — a bare token in a boolean
+# field — while the local run passed, because locally the siblings exist.
+if CORE_DIR=/nonexistent HUB_DIR=/nonexistent DS_DIR=/nonexistent \
+   ./scripts/release-manifest.sh | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
+  ok "the manifest is valid JSON with every sibling repository absent"
+else
+  bad "the manifest is not valid JSON with every sibling repository absent"
+fi
 
 echo
 printf '%d passed, %d failed\n' "$PASSED" "$FAILED"
