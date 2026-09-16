@@ -628,27 +628,27 @@ No real LLM credentials required.
 
 Priority: CONTINUOUS
 
-- [ ] API
-- [ ] RBAC
-- [ ] SCOPES
-- [ ] GLOBAL-IDS
-- [ ] EVENTS
-- [ ] ADAPTERS
-- [ ] OBSERVABILITY
-- [ ] SECURITY
-- [ ] DEPLOYMENT
-- [ ] DEVELOPMENT
-- [ ] AI
+- [-] API
+- [-] RBAC
+- [-] SCOPES
+- [-] GLOBAL-IDS
+- [-] EVENTS
+- [-] ADAPTERS
+- [-] OBSERVABILITY
+- [-] SECURITY
+- [-] DEPLOYMENT
+- [-] DEVELOPMENT
+- [-] AI
 
 ADRs:
 
-- [ ] retry/circuit policy
-- [ ] pagination convention
-- [ ] normalized errors
-- [ ] customer isolation boundary
-- [ ] Design System distribution
-- [ ] search provider architecture
-- [ ] AI routing policy
+- [-] retry/circuit policy
+- [-] pagination convention
+- [-] normalized errors
+- [-] customer isolation boundary
+- [-] Design System distribution
+- [-] search provider architecture
+- [-] AI routing policy
 
 # P15 — Repository hygiene
 
