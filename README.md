@@ -11,13 +11,19 @@ Deployment and environment repository for BSYSTEM Platform.
 The repository now contains a runnable Docker Compose foundation with:
 
 - PostgreSQL 17
-- Redis 7 for BSYSTEM application cache/state
+- Redis 7, provisioned and currently unused
 - NATS 2.11 with JetStream
 - authentik 2026.8.2 (`server` + `worker`)
 - `bsystem-integration-core`
 - `bsystem-hub`
 
-authentik does not use Redis in the current stack; Redis is reserved for BSYSTEM-owned services.
+authentik does not use Redis in the current stack, and neither does the
+Integration Core: it reads no `REDIS_URL` and references Redis nowhere, and the
+E2E stack runs the whole scenario suite without a Redis service at all. The
+container is here because `bsystem-integration-core/docs/ARCHITECTURE.md`
+reserves Redis for caching, distributed locks, short-lived state and rate
+limiting — none of which is built yet. Nothing depends on it, so it cannot hold
+up a start.
 
 ## Quick start
 

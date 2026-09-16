@@ -122,7 +122,6 @@ services:
     environment:
       HTTP_ADDR: ":8080"
       DATABASE_URL: postgres://bsystem:${POSTGRES_PASSWORD}@postgres:5432/bsystem_integration?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
       NATS_URL: nats://nats:4222
       AUTHENTIK_USERINFO_URL: http://authentik-server:9000/application/o/userinfo/
       ESPOCRM_URL: ${ESPOCRM_URL:-}
@@ -131,10 +130,13 @@ services:
       REDMINE_API_KEY: ${REDMINE_API_KEY:-}
       OUTLINE_URL: ${OUTLINE_URL:-}
       OUTLINE_API_KEY: ${OUTLINE_API_KEY:-}
+    # No dependency on redis: the Integration Core reads no REDIS_URL and
+    # references Redis nowhere. Waiting on it would make the platform's
+    # startup depend on a service it does not use, and docker-compose.e2e.yml
+    # already runs the whole scenario suite against a stack with no Redis in
+    # it at all.
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
       nats:
         condition: service_started
