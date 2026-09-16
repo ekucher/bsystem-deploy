@@ -695,15 +695,15 @@ Do not add CODEOWNERS unless ownership is known.
 
 Priority: MEDIUM
 
-- [ ] benchmark Global ID/mapping paths
-- [ ] inspect DB indexes
-- [ ] inspect N+1 adapter behavior
-- [ ] bounded concurrency
-- [ ] graceful shutdown
-- [ ] server read/write/idle timeouts
-- [ ] DB pool config
-- [ ] fake-upstream load-test harness
-- [ ] measured baseline documentation
+- [-] benchmark Global ID/mapping paths
+- [-] inspect DB indexes
+- [-] inspect N+1 adapter behavior
+- [-] bounded concurrency
+- [-] graceful shutdown
+- [-] server read/write/idle timeouts
+- [-] DB pool config
+- [-] fake-upstream load-test harness
+- [-] measured baseline documentation
 
 Do not invent performance numbers.
 
