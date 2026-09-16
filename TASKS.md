@@ -536,18 +536,50 @@ server.error
 
 Priority: MEDIUM
 
-- [-] Incident
-- [-] Request
-- [-] SLA state
-- [-] Severity
-- [-] Status
-- [-] relations to CL/SRV/PR/TSK/BUG/DOC
-- [-] additive migration
-- [-] repository layer
-- [-] audit
-- [-] list/detail/create/update API
-- [-] tests
-- [-] incident.created/updated/resolved events
+- [x] Incident
+- [x] Request — one table with the incident: they share a lifecycle, a
+      severity and an audience
+- [x] SLA state — the mechanism, not the targets; see the blocked item below
+- [x] Severity — `low`/`medium`/`high`/`critical`, required and never
+      defaulted, and deliberately not the event severity scale
+- [x] Status — a closed graph; `closed` is terminal, `resolved` may reopen
+- [x] relations to CL/SRV/PR/TSK/BUG/DOC — verified to resolve before storage
+- [x] additive migration — `007_support.sql`
+- [x] repository layer
+- [x] audit — creation and update
+- [x] list/detail/create/update API — the detail endpoints refuse before they
+      read, so a refused caller cannot tell an existing record from a missing
+      one
+- [x] tests — unit, contract and end to end
+- [x] incident.created/updated/resolved events — only creation notifies; the
+      title travels in the event, the summary never does
+
+See `bsystem-integration-core/docs/SUPPORT.md`.
+
+- [!] SLA targets — the actual response and resolution times per severity
+
+```text
+BLOCKED:
+Task: Fill support_sla_policies with the business's response and resolution
+  targets for each severity
+Repository: ekucher/bsystem-integration-core
+Reason: What the business promises a customer, and what it owes when it
+  misses, is a commercial commitment. CLAUDE.md lists final SLA policy among
+  the stop conditions. Plausible-looking defaults committed here would appear
+  in front of customers as a promise nobody made, and would be believed
+  precisely because they would sit in the same field a real one does.
+What is required from owner: response and resolution minutes for low, medium,
+  high and critical. Any subset works — a severity with no row simply reports
+  its SLA state as unset.
+Safe work already completed: the whole mechanism is built and tested. Due
+  dates, the at-risk threshold, breach detection, the rule that a resolved
+  record's state stops moving, and the rule that the response target stops
+  binding once met are all covered by unit tests. The policy table is seeded
+  empty on purpose, and with no policy the platform reports "unset" rather
+  than "on track" — a distinction that exists so the platform never claims a
+  promise is being kept when none was made.
+Related commit/PR: ekucher/bsystem-integration-core#3, ekucher/bsystem-deploy#2
+```
 
 # P13 — AI Gateway skeleton
 
