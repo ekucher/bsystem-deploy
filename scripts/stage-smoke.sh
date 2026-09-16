@@ -148,9 +148,13 @@ echo
 echo "== Normalized human API"
 http_check "integration-core" "GET /api/v1/me"            "$CORE_URL/api/v1/me"            "200"     human
 http_check "integration-core" "GET /api/v1/modules"       "$CORE_URL/api/v1/modules"       "200"     human
-http_check "integration-core" "GET /api/v1/clients"       "$CORE_URL/api/v1/clients"       "200 403" human
-http_check "integration-core" "GET /api/v1/projects"      "$CORE_URL/api/v1/projects"      "200 403" human
-http_check "integration-core" "GET /api/v1/documents"     "$CORE_URL/api/v1/documents"     "200 403" human
+# 503 is accepted here, not tolerated: an adapter-backed collection answers
+# 503 when its source system is not configured, which is a legitimate stage
+# state. Accepting only 200 and 403 would report a correctly behaving platform
+# as broken whenever an integration is deliberately left out.
+http_check "integration-core" "GET /api/v1/clients"       "$CORE_URL/api/v1/clients"       "200 403 503" human
+http_check "integration-core" "GET /api/v1/projects"      "$CORE_URL/api/v1/projects"      "200 403 503" human
+http_check "integration-core" "GET /api/v1/documents"     "$CORE_URL/api/v1/documents"     "200 403 503" human
 http_check "integration-core" "GET /api/v1/notifications" "$CORE_URL/api/v1/notifications" "200"     human
 http_check "integration-core" "GET /api/v1/search"        "$CORE_URL/api/v1/search?q=test" "200"     human
 

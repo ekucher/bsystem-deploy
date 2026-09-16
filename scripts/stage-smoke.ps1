@@ -157,9 +157,13 @@ Invoke-Check 'integration-core' 'machine API rejects anonymous'         "$CoreUr
 Write-Host ''; Write-Host '== Normalized human API'
 Invoke-Check 'integration-core' 'GET /api/v1/me'            "$CoreUrl/api/v1/me"            @(200)      human
 Invoke-Check 'integration-core' 'GET /api/v1/modules'       "$CoreUrl/api/v1/modules"       @(200)      human
-Invoke-Check 'integration-core' 'GET /api/v1/clients'       "$CoreUrl/api/v1/clients"       @(200, 403) human
-Invoke-Check 'integration-core' 'GET /api/v1/projects'      "$CoreUrl/api/v1/projects"      @(200, 403) human
-Invoke-Check 'integration-core' 'GET /api/v1/documents'     "$CoreUrl/api/v1/documents"     @(200, 403) human
+# 503 is accepted here, not tolerated: an adapter-backed collection answers 503
+# when its source system is not configured, which is a legitimate stage state.
+# Accepting only 200 and 403 would report a correctly behaving platform as
+# broken whenever an integration is deliberately left out.
+Invoke-Check 'integration-core' 'GET /api/v1/clients'       "$CoreUrl/api/v1/clients"       @(200, 403, 503) human
+Invoke-Check 'integration-core' 'GET /api/v1/projects'      "$CoreUrl/api/v1/projects"      @(200, 403, 503) human
+Invoke-Check 'integration-core' 'GET /api/v1/documents'     "$CoreUrl/api/v1/documents"     @(200, 403, 503) human
 Invoke-Check 'integration-core' 'GET /api/v1/notifications' "$CoreUrl/api/v1/notifications" @(200)      human
 Invoke-Check 'integration-core' 'GET /api/v1/search'        "$CoreUrl/api/v1/search?q=test" @(200)      human
 
