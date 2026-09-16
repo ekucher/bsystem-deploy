@@ -18,7 +18,7 @@ jobs:
         working-directory: mocks
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check shell scripts parse
         run: |
@@ -185,7 +185,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout deployment repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # A branch in the Integration Core with the same name as this one is
       # used when it exists, so a change spanning both repositories can be
@@ -203,7 +203,7 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Checkout Integration Core
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ekucher/bsystem-integration-core
           ref: ${{ steps.core-ref.outputs.ref }}
