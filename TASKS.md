@@ -1485,15 +1485,26 @@ the checker rejects it and that a CRLF text file is not mistaken for one.
       reasoning as the actions: a tag that keeps receiving patch updates is
       what makes a rebuild pick up a fixed CVE, and a digest pin without an
       updater freezes the vulnerabilities along with the version
-- [ ] generate a dependency/license inventory and flag incompatible licenses if
+- [x] generate a dependency/license inventory and flag incompatible licenses if
       any
-      — half done. This repository's three Go modules depend on nothing
-      third-party: no `go.sum`, no `require`, so there is no licence here to
-      account for. `e2e/harness.go` states that as a property of the package
-      and nothing held it, so a guard now does — the first third-party
-      dependency tends to arrive as a convenience in a test, where it is least
-      likely to be argued about. The inventory still owed is Integration Core's
-      26 Go modules and the npm trees of HUB and the Design System
+      — `docs/DEPENDENCY-LICENCES.md`, gathered by reading each dependency's
+      own licence text rather than its manifest field. Split by what actually
+      ships, because an obligation attaches to what is distributed and counting
+      test tooling alongside linked libraries is how a clean inventory hides
+      the one entry that matters. Integration Core links twelve third-party
+      modules (MIT, Apache-2.0, BSD-3-Clause); HUB ships nine packages (eight
+      MIT, `oidc-client-ts` Apache-2.0); the Design System ships none at all —
+      React is a peer dependency; this repository has no third-party Go.
+      Nothing is incompatible, and two things are named rather than left in a
+      count: MPL-2.0 (`axe-core`, `lightningcss`) is in both frontend build
+      trees and neither production tree, and `spawndamnit` declares
+      `SEE LICENSE IN LICENSE` where the file is MIT verbatim.
+      Two of my own errors are recorded there because both are easy to repeat:
+      `klauspost/compress` is BSD-3-Clause whose licence file *contains* the
+      Apache-2.0 text for vendored portions, and a first pass matching "Apache
+      License" called it Apache-2.0; and 68 packages first counted as having no
+      licence are platform binaries for other architectures that this machine
+      never installed
 
 Definition of Done:
 - rendered stacks are security-checked rather than source YAML only;

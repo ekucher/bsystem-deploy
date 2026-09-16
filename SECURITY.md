@@ -103,6 +103,18 @@ tested artefact. Treat it as an answer to "were we shipping this dependency at
 this commit", which is the question an advisory raises, and not as a bill of
 materials for a specific running container.
 
+### Dependency licences
+
+`docs/DEPENDENCY-LICENCES.md` lists what every repository depends on and under
+what terms, split by what actually ships rather than by what appears in a
+manifest — a test framework that never leaves CI and a library linked into the
+server binary are different questions wearing the same word.
+
+Nothing is incompatible. Two entries are named rather than left in a count:
+MPL-2.0 (`axe-core`, `lightningcss`) appears in both frontend build trees and
+in neither production tree, and `spawndamnit` declares `SEE LICENSE IN LICENSE`
+where its licence file is MIT verbatim.
+
 ### CodeQL
 
 CodeQL runs in Integration Core, HUB and the Design System, and deliberately
