@@ -8,6 +8,10 @@ interface. This reads the rendered configuration (so anchors, overrides and
 variable defaults are already resolved) and fails on any of those.
 
     python3 scripts/check-hardening.py docker-compose.yml docker-compose.e2e.yml
+
+Rendering needs Docker. `--rendered FILE` checks an already-rendered stack
+instead, which is how this script's own tests exercise it on a machine with no
+Docker installed.
 """
 
 import subprocess
@@ -20,6 +24,25 @@ import yaml
 # hardening pass against a real deployment rather than in an unverified guess,
 # so it is exempt from cap_drop and named here instead of failing silently.
 CAPABILITY_EXEMPT = {"authentik-server", "authentik-worker"}
+
+# Services that run on a read-only root filesystem today. This is a pin rather
+# than a policy: PostgreSQL, NATS and authentik all write to theirs and are
+# deliberately absent. What it stops is a stateless service quietly losing the
+# setting — nothing else would notice, because losing it breaks nothing. The
+# container keeps running, and a writable root filesystem is only visible at
+# the moment somebody is using it.
+#
+# A service named here is checked in every stack that contains it, and ignored
+# in a stack that does not. docs/DEPLOYMENT.md states this property as one this
+# script enforces.
+READ_ONLY = {
+    "integration-core",
+    "hub",
+    "mock-identity",
+    "mock-espocrm",
+    "mock-redmine",
+    "mock-outline",
+}
 
 
 def render(paths):
@@ -38,9 +61,20 @@ def render(paths):
     return yaml.safe_load(out.stdout)
 
 
-def check(paths, failures):
-    label = " + ".join(paths)
-    for name, service in sorted(render(paths).get("services", {}).items()):
+def inspect(label, rendered, failures):
+    """Check one rendered stack. Returns the number of services it checked."""
+    services = (rendered or {}).get("services") or {}
+
+    # A stack that renders no service passes every check below without
+    # executing one of them. That is the failure mode this script is least able
+    # to notice from its own output, and the most plausible: a renamed file, an
+    # overlay checked on its own, a variable that expands to nothing. An
+    # unhardened stack and a stack nobody looked at both print OK.
+    if not services:
+        failures.append("%s renders no service; the checks would pass vacuously" % label)
+        return 0
+
+    for name, service in sorted(services.items()):
         where = "%s: %s" % (label, name)
 
         if "no-new-privileges:true" not in (service.get("security_opt") or []):
@@ -59,6 +93,12 @@ def check(paths, failures):
         if service.get("privileged"):
             failures.append("%s runs privileged" % where)
 
+        if name in READ_ONLY and not service.get("read_only"):
+            failures.append(
+                "%s does not run on a read-only root filesystem; either restore "
+                "read_only or remove it from READ_ONLY with the reason" % where
+            )
+
         for volume in service.get("volumes") or []:
             source = volume.get("source") if isinstance(volume, dict) else volume
             if source and "docker.sock" in str(source):
@@ -74,18 +114,35 @@ def check(paths, failures):
                     "%s publishes port %s on every interface" % (where, published)
                 )
 
+    return len(services)
+
 
 def main(arguments):
     """Each argument is one stack; use '+' to layer a base file with overlays."""
-    stacks = [argument.split("+") for argument in arguments]
     failures = []
-    for stack in stacks:
-        check(stack, failures)
+    checked = []
+
+    if arguments and arguments[0] == "--rendered":
+        if len(arguments) != 2:
+            print("usage: check-hardening.py --rendered FILE", file=sys.stderr)
+            return 2
+        path = arguments[1]
+        with open(path, encoding="utf-8") as handle:
+            checked.append(inspect(path, yaml.safe_load(handle), failures))
+    else:
+        for stack in [argument.split("+") for argument in arguments]:
+            checked.append(inspect(" + ".join(stack), render(stack), failures))
+
     for failure in failures:
         print("FAIL: %s" % failure)
     if failures:
         return 1
-    print("OK: %d stack(s) pass the hardening checks" % len(stacks))
+    # The service count is printed because the number is the thing a reader can
+    # sanity-check: a stack that silently shrank still says OK.
+    print(
+        "OK: %d stack(s), %d service(s), pass the hardening checks"
+        % (len(checked), sum(checked))
+    )
     return 0
 
 

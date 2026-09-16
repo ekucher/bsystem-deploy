@@ -300,6 +300,80 @@ printf 'entries: []\n' > "$GROUPS_WORK/authentik/blueprints/bsystem-groups.yaml"
 (cd "$GROUPS_WORK" && ./scripts/check-identity-groups.py >/dev/null 2>&1)
 check "$?" "1" "an empty blueprint fails rather than matching an empty set"
 
+# --- check-hardening.py ------------------------------------------------------
+#
+# This script is the only thing keeping the container hardening in place:
+# Trivy has no Compose rules, and losing a setting breaks nothing at runtime,
+# so a regression is invisible until somebody is exploiting it. It renders the
+# stacks with Docker, which CI has and a contributor's machine may not, so it
+# is exercised here through --rendered against fixtures.
+
+HARD_WORK="$WORK/hardening"
+mkdir -p "$HARD_WORK"
+
+# A stack shaped like the real one: hardened, read-only where it should be,
+# and publishing only on the loopback address.
+write_rendered() {
+  cat > "$HARD_WORK/rendered.yml" <<YAML
+services:
+  postgres:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN"]
+  authentik-server:
+    security_opt: ["no-new-privileges:true"]
+  integration-core:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: ${1:-true}
+    ports:
+      - host_ip: "${2:-127.0.0.1}"
+        published: "8080"
+YAML
+}
+
+write_rendered
+python3 scripts/check-hardening.py --rendered "$HARD_WORK/rendered.yml" >/dev/null 2>&1
+check "$?" "0" "a hardened stack passes"
+
+# The property docs/DEPLOYMENT.md states and nothing was checking.
+write_rendered false
+hard_output="$(python3 scripts/check-hardening.py --rendered "$HARD_WORK/rendered.yml" 2>&1)"
+check "$?" "1" "a stateless service losing read_only is caught"
+if contains "$hard_output" "integration-core does not run on a read-only root filesystem"; then
+  ok "the read-only failure names the service"
+else
+  bad "the read-only failure does not name the service: $hard_output"
+fi
+
+write_rendered true "0.0.0.0"
+python3 scripts/check-hardening.py --rendered "$HARD_WORK/rendered.yml" >/dev/null 2>&1
+check "$?" "1" "a port published on every interface is caught"
+
+# The failure this script cannot see in its own output: nothing to check reads
+# exactly like nothing wrong. A renamed file or an overlay checked alone gets
+# here.
+printf 'services: {}\n' > "$HARD_WORK/empty.yml"
+empty_output="$(python3 scripts/check-hardening.py --rendered "$HARD_WORK/empty.yml" 2>&1)"
+check "$?" "1" "a stack that renders no service fails rather than passing vacuously"
+if contains "$empty_output" "vacuously"; then
+  ok "the empty-stack failure says why an OK would have been wrong"
+else
+  bad "the empty-stack failure is unclear: $empty_output"
+fi
+
+# An exemption that stops being needed must be removed rather than left to rot:
+# a silent exemption is how a service comes to look checked.
+cat > "$HARD_WORK/exempt.yml" <<'YAML'
+services:
+  authentik-server:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+YAML
+python3 scripts/check-hardening.py --rendered "$HARD_WORK/exempt.yml" >/dev/null 2>&1
+check "$?" "1" "a service that no longer needs its capability exemption is caught"
+
+
 echo
 printf '%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -gt 0 ] && exit 1

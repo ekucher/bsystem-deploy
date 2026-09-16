@@ -43,10 +43,12 @@ owner-run pass against a real deployment rather than in an unverified guess
 committed here.
 
 `scripts/check-hardening.py` runs in CI and fails on a regression in any of
-this. Trivy's misconfiguration scanner has no Docker Compose rules, so that
-script — not the scanner — is what keeps the settings from drifting. The E2E
-stack is additionally started for real on every push, so a capability set that
-breaks a container fails the build rather than production.
+this — including the read-only root filesystems, which it did not check until
+the paragraph above was compared against it. Trivy's misconfiguration scanner
+has no Docker Compose rules, so that script — not the scanner — is what keeps
+the settings from drifting. The E2E stack is additionally started for real on
+every push, so a capability set that breaks a container fails the build rather
+than production.
 
 See [`../SECURITY.md`](../SECURITY.md) for the current per-service state.
 
