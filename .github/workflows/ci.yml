@@ -172,6 +172,11 @@ jobs:
       - name: Check acceptance docs reference paths that exist
         run: python3 scripts/check-doc-links.py
 
+      - name: Check the documentation and the Compose files agree
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check-config-docs.py
+
       - name: Check every Go module is covered by the security scanners
         run: |
           python3 -m pip install --quiet pyyaml
@@ -235,6 +240,14 @@ jobs:
       - name: Vet
         working-directory: e2e
         run: go vet ./...
+
+      # Only this job checks out the Integration Core, and a Global ID prefix
+      # is written once here and once in Core's counters seed, so the
+      # comparison exists nowhere else. It is deliberately not in Stage
+      # assets: without Core beside it the check would print a note and pass,
+      # which is the vacuous green this wave keeps finding.
+      - name: Check the Global ID prefixes agree with the platform's seed
+        run: python3 scripts/check-global-ids.py
 
       # Here the Integration Core is checked out beside this repository, so the
       # script also compares the platform's RBAC seed — the list that actually

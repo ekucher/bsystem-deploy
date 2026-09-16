@@ -406,6 +406,120 @@ if contains "$nobind_output" "proves nothing"; then
 else
   bad "the missing-bind failure is unclear: $nobind_output"
 fi
+# --- Global ID prefixes agree with the platform's seed -----------------------
+#
+# A prefix documented but never seeded allocates nothing: the request fails
+# with unsupported_entity_type for a type the rules say exists. A prefix seeded
+# but never documented is worse in the other direction, because a Global ID
+# that ships is permanent. Nothing else compares the two: the E2E stack
+# exercises the types it happens to use.
+
+GID_WORK="$WORK/globalids/bsystem-deploy"
+mkdir -p "$GID_WORK/scripts"
+cp scripts/check-global-ids.py "$GID_WORK/scripts/"
+# The copy is placed so that the sibling layout still holds: the script finds
+# Integration Core beside its own repository root, and linking it here exercises
+# that resolution rather than a path the test passed in. Without this the
+# mutations run against a tree with no Core, where the script correctly reports
+# that it compared nothing — and a test that accepts that is testing the skip.
+ln -sfn "$(cd ../bsystem-integration-core 2>/dev/null && pwd)" "$WORK/globalids/bsystem-integration-core" 2>/dev/null || true
+
+if [ -d ../bsystem-integration-core/internal/platformdb/migrations ]; then
+  if python3 scripts/check-global-ids.py >/dev/null 2>&1; then
+    ok "the Global ID prefixes agree with the platform's seed"
+  else
+    bad "Global ID prefixes disagree: $(python3 scripts/check-global-ids.py 2>&1)"
+  fi
+
+  # A prefix in the rules that no migration seeds.
+  cp CLAUDE.md "$GID_WORK/CLAUDE.md"
+  python3 - "$GID_WORK/CLAUDE.md" <<'PYMUT'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write(s.replace("REP-*  Repository", "REP-*  Repository\nXYZ-*  Widget", 1))
+PYMUT
+  gid_output="$(cd "$GID_WORK" && python3 scripts/check-global-ids.py 2>&1)"
+  check "$?" "1" "a documented Global ID prefix nothing seeds is caught"
+  if contains "$gid_output" "XYZ-"; then
+    ok "the prefix failure names the prefix"
+  else
+    bad "the prefix failure does not name the prefix: $gid_output"
+  fi
+
+  # And the other direction: a prefix the platform seeds that nobody wrote down.
+  cp CLAUDE.md "$GID_WORK/CLAUDE.md"
+  python3 - "$GID_WORK/CLAUDE.md" <<'PYMUT'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+open(p, "w").write(s.replace("SVC-*  Service identity\n", "", 1))
+PYMUT
+  undoc_output="$(cd "$GID_WORK" && python3 scripts/check-global-ids.py 2>&1)"
+  check "$?" "1" "a seeded Global ID prefix nobody documented is caught"
+  if contains "$undoc_output" "SVC-"; then
+    ok "the undocumented-prefix failure names the prefix"
+  else
+    bad "the undocumented-prefix failure does not name the prefix: $undoc_output"
+  fi
+else
+  ok "Integration Core is not checked out; the Global ID prefix comparison is skipped"
+fi
+
+# --- the documentation and the Compose files agree ---------------------------
+#
+# Three facts live in both places and each drifts in silence. The one that
+# prompted this: .env.example documented BIND_ADDRESS, which does nothing in
+# stage, and never mentioned STAGE_PUBLISH_ADDRESS, which is what decides
+# whether stage is exposed. An operator copying that file could not have known
+# the variable existed.
+
+if python3 scripts/check-config-docs.py >/dev/null 2>&1; then
+  ok "the documentation and the Compose files agree"
+else
+  bad "documentation disagrees with the Compose files: $(python3 scripts/check-config-docs.py 2>&1)"
+fi
+
+CFG_WORK="$WORK/configdocs"
+mkdir -p "$CFG_WORK"
+
+# Each mutation is made on a copy of the tree, never on the tracked file: a
+# test that edits what is tracked and puts it back leaves the working tree
+# wrong if it is interrupted.
+cp -r .env.example docker-compose.yml docker-compose.e2e.yml docker-compose.stage.yml "$CFG_WORK/" 2>/dev/null
+mkdir -p "$CFG_WORK/scripts" "$CFG_WORK/docs"
+cp scripts/check-config-docs.py "$CFG_WORK/scripts/"
+cp docs/RUN-P0.md "$CFG_WORK/docs/"
+
+grep -v 'STAGE_PUBLISH_ADDRESS=127.0.0.1' .env.example > "$CFG_WORK/.env.example"
+var_output="$(cd "$CFG_WORK" && python3 scripts/check-config-docs.py 2>&1)"
+check "$?" "1" "a variable the stacks read but .env.example omits is caught"
+if contains "$var_output" "STAGE_PUBLISH_ADDRESS"; then
+  ok "the variable failure names the variable"
+else
+  bad "the variable failure does not name the variable: $var_output"
+fi
+
+cp .env.example "$CFG_WORK/.env.example"
+printf '\nOpen `http://localhost:8099/` to continue.\n' >> "$CFG_WORK/docs/RUN-P0.md"
+port_output="$(cd "$CFG_WORK" && python3 scripts/check-config-docs.py 2>&1)"
+check "$?" "1" "a documented port no stack publishes is caught"
+if contains "$port_output" "8099"; then
+  ok "the port failure names the port"
+else
+  bad "the port failure does not name the port: $port_output"
+fi
+
+cp docs/RUN-P0.md "$CFG_WORK/docs/RUN-P0.md"
+printf '\nRun `docker compose logs integration-kore` to inspect it.\n' >> "$CFG_WORK/docs/RUN-P0.md"
+svc_output="$(cd "$CFG_WORK" && python3 scripts/check-config-docs.py 2>&1)"
+check "$?" "1" "a documented service no stack defines is caught"
+if contains "$svc_output" "integration-kore"; then
+  ok "the service failure names the service"
+else
+  bad "the service failure does not name the service: $svc_output"
+fi
+
 # --- every Go module is inside the security scanners -------------------------
 #
 # The matrix that decides what govulncheck and staticcheck see is written by
