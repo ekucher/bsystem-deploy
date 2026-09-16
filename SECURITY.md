@@ -7,7 +7,7 @@
 - Never commit production secrets, tokens, passwords, private keys, certificates with private material, or database credentials.
 - Use `.env.example` only with non-sensitive placeholders.
 - Production services must use HTTPS.
-- Databases, Redis, NATS and other internal backends must not be exposed to untrusted networks.
+- Databases, NATS and other internal backends must not be exposed to untrusted networks.
 - Restrict management interfaces to approved networks/VPN where applicable.
 - Pin production image versions; avoid `latest`.
 - Apply least privilege to containers and service accounts.
@@ -47,7 +47,6 @@ with a published CycloneDX SBOM.
 | Service | no-new-privileges | capabilities | root filesystem |
 | --- | --- | --- | --- |
 | postgres | yes | `ALL` dropped, five re-added for the entrypoint's privilege drop | writable (PGDATA) |
-| redis | yes | `ALL` dropped, four re-added | writable (AOF) |
 | nats | yes | `ALL` dropped | writable (JetStream store) |
 | authentik-server, authentik-worker | yes | left to the image | writable |
 | integration-core | yes | `ALL` dropped | read-only |

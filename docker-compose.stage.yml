@@ -47,19 +47,6 @@ services:
           # database. Raise it with shared_buffers, never on its own.
           memory: 2g
 
-  redis:
-    restart: always
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-
   nats:
     restart: always
     deploy:
@@ -139,4 +126,3 @@ services:
 
 volumes:
   postgres_data:
-  redis_data:

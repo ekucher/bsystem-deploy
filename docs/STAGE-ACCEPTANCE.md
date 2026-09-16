@@ -18,7 +18,6 @@ source systems BSYSTEM reads and never writes.
 | Integration Core | platform | yes | normalized API, authorization, adapters, events |
 | HUB | platform | yes | the browser application |
 | PostgreSQL | platform | yes | mappings, RBAC, audit, notifications, support, AI audit |
-| Redis | platform | yes | authentik's cache and task broker |
 | NATS | platform | no | event bus; absent means degraded, not down |
 | EspoCRM | source | no | authoritative for clients and contacts |
 | Redmine | source | no | authoritative for projects and issues |
@@ -73,7 +72,6 @@ restarting it.
 | `HTTP_ADDR` | public config | optional | `:8080` | Listen address. |
 | `DATABASE_URL` | **secret** | **required** | — | Carries the password. Never log it; the mapping audit redacts it from errors. |
 | `NATS_URL` | public config | optional | — | Empty disables eventing. |
-| `REDIS_URL` | public config | optional | — | Used by authentik; the Core does not require it. |
 | `AUTHENTIK_USERINFO_URL` | public config | **required** | — | Server-to-server UserInfo endpoint. Must be reachable **from the Core container**, which is not the same as from your laptop. |
 | `LOG_LEVEL` | public config | optional | `info` | |
 | `DATABASE_MAX_CONNS` | public config | optional | driver default | Bounded at 500; an out-of-range value falls back rather than failing. |
@@ -130,12 +128,12 @@ Integration Core ──▶ authentik     UserInfo (server-to-server)
 Integration Core ──▶ PostgreSQL    internal network only
 Integration Core ──▶ NATS          internal network only
 Integration Core ──▶ EspoCRM / Redmine / Outline   egress
-authentik        ──▶ PostgreSQL, Redis             internal network only
+authentik        ──▶ PostgreSQL                    internal network only
 ```
 
 Two properties hold in the Compose topology and should hold in stage:
 
-- **PostgreSQL, Redis and NATS are on internal networks** and are not published.
+- **PostgreSQL and NATS are on internal networks** and are not published.
   Nothing outside the stack reaches them.
 - **The browser talks to authentik and the Core directly**, not through the HUB.
   The HUB is static files; it holds no token and proxies no API call in stage.

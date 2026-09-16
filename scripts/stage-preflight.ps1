@@ -134,7 +134,7 @@ function Test-ConfiguredUrl {
 
     if ($SkipNetwork) { return }
 
-    $composeServices = @('postgres', 'redis', 'nats', 'authentik-server', 'integration-core', 'hub')
+    $composeServices = @('postgres', 'nats', 'authentik-server', 'integration-core', 'hub')
     try {
         $null = [System.Net.Dns]::GetHostEntry($hostName)
         Write-Pass "$Name resolves: $hostName"

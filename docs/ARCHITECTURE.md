@@ -31,13 +31,12 @@ Reverse Proxy :443
 Internal Docker networks
         │
         ├── PostgreSQL
-        ├── Redis
         ├── NATS
         ├── Integration Core
         └── observability backends
 ```
 
-Databases, Redis and NATS should not be published to untrusted networks.
+Databases and NATS should not be published to untrusted networks.
 
 ## Data services
 

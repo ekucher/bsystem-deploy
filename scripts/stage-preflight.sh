@@ -134,7 +134,7 @@ url_port() {
     *:*) port="${hostport##*:}" ;;
     *) case "$(url_scheme "$1")" in
          https) port=443 ;; http) port=80 ;; postgres|postgresql) port=5432 ;;
-         redis) port=6379 ;; nats) port=4222 ;; *) port='' ;;
+         nats) port=4222 ;; *) port='' ;;
        esac ;;
   esac
   printf '%s' "$port"
@@ -170,7 +170,7 @@ check_url() {
       pass "$name resolves: $host"
     else
       case "$host" in
-        postgres|redis|nats|authentik-server|integration-core|hub)
+        postgres|nats|authentik-server|integration-core|hub)
           info "$name names a Compose service ($host); it resolves inside the stack, not here" ;;
         *) fail "$name does not resolve: $host" ;;
       esac
