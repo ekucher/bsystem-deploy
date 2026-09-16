@@ -406,6 +406,34 @@ if contains "$nobind_output" "proves nothing"; then
 else
   bad "the missing-bind failure is unclear: $nobind_output"
 fi
+# --- the smoke runners only read -----------------------------------------------
+#
+# A smoke run is pointed at a stage deployment wired to real upstreams, and it
+# is run by somebody who has just been handed credentials and is checking the
+# deployment works. It must not be able to change anything it touches. Today it
+# cannot: every call is a default GET with no body and the response goes to
+# /dev/null. Nothing held that, and adding -X POST to a check is a small edit
+# that would look like more thorough smoke testing.
+
+for runner in scripts/stage-smoke.sh scripts/smoke-p0.sh; do
+  if grep -E 'curl' "$runner" | grep -qE -- '-X[[:space:]]*(POST|PUT|DELETE|PATCH)|--request|--data|--form|--upload-file'; then
+    bad "$runner makes a mutating request: a smoke check must not change what it is checking"
+  else
+    ok "$(basename "$runner") only reads"
+  fi
+done
+
+# A trace flag would echo the curl invocation, and the invocation carries the
+# bearer token in a header. That is how a secret reaches a terminal and then a
+# pasted support ticket.
+for runner in scripts/stage-smoke.sh scripts/stage-preflight.sh scripts/smoke-p0.sh; do
+  if grep -nE '^[[:space:]]*set[[:space:]]+-[a-z]*x' "$runner" >/dev/null 2>&1; then
+    bad "$runner enables shell tracing, which would echo the Authorization header"
+  else
+    ok "$(basename "$runner") does not enable shell tracing"
+  fi
+done
+
 # --- documented endpoints exist ----------------------------------------------
 #
 # An endpoint named in a runbook is followed by somebody at a keyboard. A 404

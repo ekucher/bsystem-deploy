@@ -88,6 +88,46 @@ EXTERNAL_PORTS: dict[str, str] = {
 # rather than a service.
 NOT_A_SERVICE = {"up", "down", "run", "exec", "logs", "config", "build", "ps", "pull"}
 
+# 4. Example addresses must be reserved ones.
+#
+# A runbook is copied. A hostname or address in one that belongs to somebody
+# else sends a reader's credentials, or their traffic, to a stranger — and the
+# reader has no way to tell a placeholder from a real endpoint somebody forgot
+# to redact. The reserved spaces exist so a placeholder can be recognised as
+# one: RFC 2606 for names, RFC 5737 for addresses.
+RESERVED_SUFFIXES = (".example", ".invalid", ".test", ".localhost", ".local")
+RESERVED_DOMAINS = ("example.com", "example.org", "example.net")
+ADDRESS = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+HOSTNAME = re.compile(r"\b(?:https?://)([a-z0-9][a-z0-9.-]*\.[a-z]{2,})\b")
+
+
+def reserved_address(value: str) -> bool:
+    """Whether a dotted quad is one nobody can be reached at."""
+    try:
+        parts = [int(part) for part in value.split(".")]
+    except ValueError:
+        return True
+    if len(parts) != 4 or any(part > 255 for part in parts):
+        # Not an address at all — a version number, a duration, a port list.
+        return True
+    if parts[0] == 127 or parts == [0, 0, 0, 0]:
+        return True
+    # RFC 5737 documentation ranges.
+    if parts[:3] in ([192, 0, 2], [198, 51, 100], [203, 0, 113]):
+        return True
+    # Private ranges are not the internet, so a reader cannot leak to a
+    # stranger through one; they are how a real stage deployment is addressed.
+    if parts[0] == 10 or (parts[0] == 192 and parts[1] == 168):
+        return True
+    if parts[0] == 172 and 16 <= parts[1] <= 31:
+        return True
+    return False
+
+
+def reserved_host(value: str) -> bool:
+    host = value.lower().rstrip(".")
+    return host.endswith(RESERVED_SUFFIXES) or host in RESERVED_DOMAINS or host == "localhost"
+
 
 def documents() -> list[Path]:
     return sorted(
@@ -187,6 +227,32 @@ def main() -> int:
                     f"{name!r}, which no stack defines"
                 )
 
+    # 4. Example addresses.
+    addresses = 0
+    for document in documents():
+        if document.name == "TASKS.md":
+            continue
+        for number, line in enumerate(document.read_text(encoding="utf-8").splitlines(), 1):
+            for host in HOSTNAME.findall(line):
+                addresses += 1
+                if not reserved_host(host):
+                    problems.append(
+                        f"{document.relative_to(ROOT)}:{number}: names the host {host}, "
+                        f"which is not a reserved example name; a runbook is copied, and a "
+                        f"real hostname in one sends somebody's traffic to a stranger"
+                    )
+            for value in ADDRESS.findall(line):
+                if not reserved_address(value):
+                    addresses += 1
+                    problems.append(
+                        f"{document.relative_to(ROOT)}:{number}: names the address {value}, "
+                        f"which is neither loopback, private, nor an RFC 5737 documentation "
+                        f"address"
+                    )
+    # Findings first, then the guard. The same ordering was got wrong in
+    # check-hardening.py earlier in this wave: a guard that returns before the
+    # findings answers a different question than the caller asked, and hides
+    # the answer to the real one.
     if problems:
         print("documentation and the Compose files disagree:\n")
         for problem in problems:
@@ -194,9 +260,13 @@ def main() -> int:
         print(f"\n{len(problems)} finding(s)")
         return 1
 
+    if addresses == 0:
+        print("no address was found in any document; the address check proves nothing", file=sys.stderr)
+        return 1
+
     print(
-        "checked %d variable(s), %d published port(s) and %d service(s) against the documentation"
-        % (len(used), len(published), len(services))
+        "checked %d variable(s), %d published port(s), %d service(s) and %d address(es)"
+        % (len(used), len(published), len(services), addresses)
     )
     return 0
 
