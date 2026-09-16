@@ -1024,3 +1024,296 @@ credentials, or makes a destructive change.
 - [x] execution order, with PowerShell and shell command sequences
 - [x] expected outcomes, rollback, acceptance checklist
 - [x] known limitations and the 14 remaining blocked items
+
+# P18 — Repository artifact cleanup
+
+Priority: HIGH
+
+Goal: remove generated or accidental repository artefacts and make their return
+fail CI rather than rely on review.
+
+- [ ] inspect the committed `bsystem-integration-core/mapping-audit` root file
+- [ ] if it is a compiled/generated executable, remove it from Git while keeping
+      `cmd/mapping-audit` source intact
+- [ ] add precise ignore rule(s) for local build output without hiding source
+- [ ] scan all four repositories for committed binaries, archives, coverage
+      outputs, temporary files and generated build directories
+- [ ] add a CI guard that rejects known generated executable/build artefacts
+- [ ] document any intentionally committed generated file and why it belongs
+
+Definition of Done:
+- no accidental build artefact remains tracked;
+- the source needed to reproduce tools remains tracked;
+- a regression test/CI check fails if the same class of artefact returns;
+- relevant CI and Security workflows are green.
+
+# P19 — Independent invariant audit
+
+Priority: CRITICAL
+Depends on: P18
+
+Goal: do not treat this backlog, documentation or existing tests as proof that
+all important properties are covered. Find claims the platform makes that no
+test actually proves.
+
+- [ ] inventory security, correctness and operational invariants across all four
+      repositories
+- [ ] identify every invariant described in docs/comments/config but lacking a
+      direct test or executable check
+- [ ] prioritize authorization, tenant isolation, audit integrity, Global ID
+      immutability, migration safety, event delivery and secret handling
+- [ ] add non-vacuous tests: prove each new test fails when its invariant is
+      deliberately broken
+- [ ] fix defects discovered by those tests rather than changing expectations
+      to match incorrect behavior
+- [ ] record findings and rationale in the repository that owns the invariant
+
+Definition of Done:
+- each newly claimed invariant is backed by an executable check;
+- mutation/restoration evidence exists for high-risk checks;
+- defects found by the audit are fixed or explicitly BLOCKED;
+- all affected repositories are green.
+
+# P20 — Concurrency and database correctness
+
+Priority: CRITICAL
+Depends on: P19
+
+## P20.1 Concurrency
+
+- [ ] run and expand `go test -race ./...`
+- [ ] concurrent `EnsureIdentity`
+- [ ] concurrent `EnsureServiceIdentity`
+- [ ] concurrent Global ID allocation and source mapping
+- [ ] concurrent scope grant/revoke/read
+- [ ] concurrent audit writes
+- [ ] adapter registry/readiness concurrency
+- [ ] shutdown while requests and DB work are in flight
+
+## P20.2 Database correctness
+
+- [ ] inspect transaction boundaries and error handling
+- [ ] verify uniqueness constraints close races rather than application checks
+      alone
+- [ ] test rollback on partial failures
+- [ ] test concurrent startup/migration behavior
+- [ ] migration-from-zero plus upgrade from every practical historical schema
+      level represented by the repository
+- [ ] inspect indexes against actual lookup/order/filter paths
+- [ ] identify N+1 queries and repeated transactions not already covered by P16
+- [ ] document query-plan evidence when an index is added or rejected
+
+Definition of Done:
+- race detector green;
+- targeted concurrent tests exist for identity and Global ID paths;
+- schema constraints protect uniqueness under concurrency;
+- migration and transaction failure cases are tested;
+- no invented performance claims.
+
+# P21 — Adapter chaos and failure semantics
+
+Priority: HIGH
+Depends on: P19
+
+For EspoCRM, Redmine and Outline, exercise:
+
+- [ ] slow response / context deadline
+- [ ] malformed JSON
+- [ ] truncated response body
+- [ ] oversized response body
+- [ ] connection reset / transport error
+- [ ] 401 / 403 / 404
+- [ ] 408 / 429
+- [ ] 500 / 502 / 503 / 504
+- [ ] valid and invalid `Retry-After`
+- [ ] cancellation while sleeping between retries
+- [ ] circuit breaker closed/open/half-open transitions under concurrent calls
+- [ ] recovery after a transient upstream outage
+- [ ] verify credentials never appear in returned errors, logs or metrics
+
+Definition of Done:
+- failure behavior is deterministic and normalized;
+- retry occurs only where idempotent and safe;
+- cancellation immediately stops unnecessary retries;
+- circuit behavior is tested without wall-clock-flaky sleeps;
+- all adapter contract tests and CI are green.
+
+# P22 — OpenAPI ↔ implementation drift detection
+
+Priority: HIGH
+Depends on: P19
+
+Goal: Spectral validates the document; this task validates that the document and
+running HTTP surface describe the same contract.
+
+- [ ] build an inventory of registered human and service routes
+- [ ] compare implemented method/path pairs with `docs/openapi.yaml`
+- [ ] fail CI on undocumented implemented public API routes
+- [ ] fail CI on documented routes with no implementation
+- [ ] verify important success and rejection status codes against handlers
+- [ ] verify documented query/path parameters exist in implementation
+- [ ] ensure normalized DTO/error envelope contract tests use OpenAPI examples or
+      a generated schema validator where practical
+- [ ] keep health/metrics/internal exceptions explicit rather than silently
+      ignored
+
+Definition of Done:
+- adding/removing a public handler without updating OpenAPI fails CI;
+- adding a nonexistent OpenAPI endpoint fails CI;
+- auth/error status drift is caught by tests;
+- Spectral and implementation-drift checks are both green.
+
+# P23 — Negative and resilience E2E expansion
+
+Priority: HIGH
+Depends on: P20, P21, P22
+
+Add deterministic E2E scenarios for:
+
+- [ ] multi-page pagination across all supported adapters
+- [ ] upstream 429 followed by recovery
+- [ ] upstream 5xx followed by circuit-open/recovery behavior
+- [ ] malformed upstream entity without cross-record corruption
+- [ ] duplicate source identity/mapping conflict
+- [ ] source record deleted after a Global ID was allocated
+- [ ] expired/invalid human identity
+- [ ] adapter disabled/unconfigured
+- [ ] NATS unavailable and recovery
+- [ ] PostgreSQL unavailable during readiness/startup where practical
+- [ ] concurrent reads of the same newly discovered source records
+- [ ] authorization scope changed between requests
+- [ ] prove an E2E-required suite cannot pass by skipping all scenarios
+
+Definition of Done:
+- scenarios are deterministic and do not require production credentials;
+- expected degraded behavior is distinguished from platform failure;
+- no test succeeds vacuously;
+- Autonomous E2E remains green on `main`.
+
+# P24 — Docker and supply-chain hardening follow-up
+
+Priority: HIGH
+Depends on: P18
+
+## P24.1 Runtime/container review
+
+- [ ] re-evaluate user/root, `read_only`, `cap_drop`, `no-new-privileges`, tmpfs,
+      healthchecks, restart policy, internal networks and published ports for
+      every rendered base/E2E/stage service
+- [ ] ensure the hardening checker fails on an empty or unexpectedly incomplete
+      rendered stack
+- [ ] ensure stage exposure checks use the variable that actually controls the
+      stage mapping
+- [ ] check volume ownership/permissions and writable paths
+
+## P24.2 Supply chain
+
+- [ ] review GitHub Actions pinning policy and document whether major tags or
+      immutable SHAs are required
+- [ ] verify govulncheck/npm audit/Trivy/Gitleaks/CodeQL still cover every repo
+      and relevant image
+- [ ] verify SBOM artefacts are generated from the exact build being tested
+- [ ] review Docker base image pinning/update policy
+- [ ] generate a dependency/license inventory and flag incompatible licenses if
+      any
+
+Definition of Done:
+- rendered stacks are security-checked rather than source YAML only;
+- no silent public exposure regression is possible through the documented
+      variables;
+- security workflows stay green without broad allowlists.
+
+# P25 — Documentation/configuration consistency automation
+
+Priority: MEDIUM-HIGH
+Depends on: P19
+
+Automate checks for facts that currently exist in more than one place:
+
+- [ ] documented env vars vs Compose/runtime env vars
+- [ ] documented published ports vs Compose rendered ports
+- [ ] documented service names vs Compose service names
+- [ ] authentik blueprint groups vs mock identity groups vs RBAC seed mappings
+- [ ] Global ID prefixes/types vs implementation
+- [ ] adapter capability names vs registry/implementation/docs
+- [ ] metric names/types documented vs emitted
+- [ ] route names/endpoints in docs vs OpenAPI
+- [ ] documented file/script paths exist
+- [ ] stale references to removed services/dependencies fail CI
+
+Definition of Done:
+- at least the high-risk duplicated facts are machine-checked;
+- a one-character drift in identity group/capability/metric names fails CI;
+- docs are updated only where implementation is authoritative.
+
+# P26 — Cross-repository compatibility gate
+
+Priority: HIGH
+Depends on: P22, P23, P25
+
+Goal: a green repository must not silently depend on an incompatible sibling
+`main`.
+
+- [ ] define the provider/consumer compatibility matrix for Integration Core,
+      Deploy, HUB and Design System
+- [ ] run cross-repo checks against sibling `main` for pull requests where
+      practical
+- [ ] validate Integration Core + Deploy E2E together
+- [ ] validate HUB against the normalized API/OpenAPI contract
+- [ ] validate Design System package consumer build without consuming an
+      unversioned `main`
+- [ ] make fallback-to-main behavior explicit and fail loudly when a requested
+      sibling ref is missing in CI
+- [ ] produce a compact compatibility manifest/report as a CI artifact
+
+Definition of Done:
+- a breaking provider change is detected before a consumer merge where the
+      repository permissions/workflow allow it;
+- cross-repo jobs cannot pass because the intended sibling branch/ref was
+      silently skipped;
+- main-to-main compatibility is green.
+
+# P27 — Stage readiness package final audit
+
+Priority: HIGH
+Depends on: P18-P26
+
+This remains autonomous preparation only. Do not deploy to a real environment
+and do not request production secrets merely to complete it.
+
+- [ ] re-run an independent review of `docker-compose.stage.yml`, preflight,
+      smoke runner, release manifest and acceptance report generation
+- [ ] ensure every remaining real-environment prerequisite is represented as a
+      clear BLOCKED item rather than a guessed value
+- [ ] verify stage preflight cannot print secrets in success or failure paths
+- [ ] verify smoke checks are read-only and cannot mutate upstream systems
+- [ ] verify rollback and backup/restore instructions match the actual current
+      stack after P18-P26
+- [ ] verify all example hosts/IPs/credentials are reserved placeholders
+- [ ] produce a final autonomous handoff report with exact owner actions in
+      execution order
+
+Definition of Done:
+- all non-owner-dependent stage preparation is green and reproducible;
+- no real credential, tenant mapping or SLA value is invented;
+- only true runtime/owner decisions remain BLOCKED;
+- CI/Security/Autonomous E2E are green for every repository touched.
+
+## P18-P27 execution rule
+
+For this hardening wave, do not add unrelated business features. Prefer finding
+and proving hidden defects over increasing feature count.
+
+A task may be marked `[x]` only when:
+
+```text
+1. the change is committed/merged in GitHub according to the repository workflow;
+2. the relevant CI and Security workflows are green;
+3. tests are non-vacuous and fail when the protected property is deliberately broken;
+4. API/docs/migrations are synchronized where applicable;
+5. TASKS.md records the resulting state and any new BLOCKED owner action.
+```
+
+If one task is blocked by production access, credentials or an owner-only
+business decision, mark only that task `[!]` and continue with the next
+independent task.
