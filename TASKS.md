@@ -589,40 +589,40 @@ No real LLM credentials required.
 
 ## P13.1 Providers
 
-- [ ] generic provider interface
-- [ ] fake provider
-- [ ] Ollama client
-- [ ] OpenAI client with env-only config
-- [ ] no committed secrets
+- [-] generic provider interface
+- [-] fake provider
+- [-] Ollama client
+- [-] OpenAI client with env-only config
+- [-] no committed secrets
 
 ## P13.2 Authorization-aware context
 
-- [ ] actor identity
-- [ ] Integration Core authorization
-- [ ] explicit sources
-- [ ] explicit Global IDs
-- [ ] no unrestricted SQL
+- [-] actor identity
+- [-] Integration Core authorization
+- [-] explicit sources
+- [-] explicit Global IDs
+- [-] no unrestricted SQL
 
 ## P13.3 Classification and redaction
 
-- [ ] PUBLIC/INTERNAL/CONFIDENTIAL/SECRET/CREDENTIAL policy
-- [ ] block `CREDENTIAL`
-- [ ] Authorization/token/password/API-key redaction
-- [ ] tests proving credentials never reach provider payload
+- [-] PUBLIC/INTERNAL/CONFIDENTIAL/SECRET/CREDENTIAL policy
+- [-] block `CREDENTIAL`
+- [-] Authorization/token/password/API-key redaction
+- [-] tests proving credentials never reach provider payload
 
 ## P13.4 AI audit/API
 
-- [ ] actor
-- [ ] provider/model
-- [ ] requested sources
-- [ ] entities
-- [ ] classification summary
-- [ ] request ID/result
-- [ ] no full sensitive prompts by default
-- [ ] internal AI endpoint
-- [ ] fake-provider E2E
-- [ ] timeout/cancellation
-- [ ] request size limits
+- [-] actor
+- [-] provider/model
+- [-] requested sources
+- [-] entities
+- [-] classification summary
+- [-] request ID/result
+- [-] no full sensitive prompts by default
+- [-] internal AI endpoint
+- [-] fake-provider E2E
+- [-] timeout/cancellation
+- [-] request size limits
 
 # P14 — Documentation and ADRs
 
