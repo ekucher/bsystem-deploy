@@ -36,25 +36,6 @@ services:
       retries: 10
     networks: [data]
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    # Same shape as postgres: the entrypoint drops to the redis user, and the
-    # append-only file is written to /data.
-    cap_drop: [ALL]
-    cap_add: [CHOWN, DAC_OVERRIDE, SETGID, SETUID]
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-    networks: [data]
-
   nats:
     image: nats:2.11-alpine
     restart: unless-stopped
@@ -130,11 +111,6 @@ services:
       REDMINE_API_KEY: ${REDMINE_API_KEY:-}
       OUTLINE_URL: ${OUTLINE_URL:-}
       OUTLINE_API_KEY: ${OUTLINE_API_KEY:-}
-    # No dependency on redis: the Integration Core reads no REDIS_URL and
-    # references Redis nowhere. Waiting on it would make the platform's
-    # startup depend on a service it does not use, and docker-compose.e2e.yml
-    # already runs the whole scenario suite against a stack with no Redis in
-    # it at all.
     depends_on:
       postgres:
         condition: service_healthy
@@ -178,5 +154,4 @@ networks:
 
 volumes:
   postgres_data:
-  redis_data:
   nats_data:

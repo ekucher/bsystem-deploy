@@ -24,24 +24,20 @@ because a Global ID is deliberately not derivable from any upstream value.
 
 | Not backed up | Why |
 | --- | --- |
-| Redis (`redis_data`) | nothing in this deployment uses it — see below |
 | NATS | no durable state in this deployment; events in flight are lost, which is already true whenever NATS is down |
 | Container images | rebuilt from the repositories; the release manifest records which commits |
 | EspoCRM, Redmine, Outline data | **source systems are authoritative and are backed up by whoever runs them.** BSYSTEM holds mappings, not copies |
 | Search index | rebuilt by re-indexing; the in-memory provider has nothing to lose |
 
-Redis is worth being precise about, because this table is read during a
-recovery and a wrong answer there costs time at the worst moment. It held
-nothing in this deployment even before the volume was emptied: authentik is
-configured against PostgreSQL alone and does not use Redis, and the Integration
-Core reads no `REDIS_URL` and references Redis nowhere — `docker-compose.e2e.yml`
-runs the entire scenario suite against a stack with no Redis service in it.
-The container is provisioned because `bsystem-integration-core/docs/ARCHITECTURE.md`
-reserves Redis for caching, distributed locks, short-lived state and rate
-limiting. None of that is built yet. This row previously said the volume was
-authentik's cache and task broker, which was wrong on both counts.
+A `redis_data` volume may survive on a host that ran an older revision of
+this stack. It is not in the table because there is no Redis service any more,
+and it never held anything: authentik here is configured against PostgreSQL
+alone, and the Integration Core never read `REDIS_URL`. Three documents,
+including this one, described that volume as authentik's cache and task broker.
+It can be removed with `docker volume rm bsystem_redis_data` once the stack is
+down, or left alone — nothing reads it either way.
 
-That row about source systems is the architectural point: BSYSTEM is not a second CRM. Its
+The row about source systems is the architectural point: BSYSTEM is not a second CRM. Its
 backup protects the mapping and governance layer, not the business data, and a
 restore does not — and must not — try to put a source system back.
 
@@ -135,11 +131,9 @@ Ordering matters here more than the commands do.
    ```
 
 4. **Start in dependency order** — PostgreSQL and NATS, then authentik, then
-   the Core, then the HUB. Redis starts alongside them for completeness; no
-   service waits on it, so a Redis that comes up slowly does not hold up a
-   recovery.
+   the Core, then the HUB.
    ```bash
-   docker compose up -d postgres nats redis
+   docker compose up -d postgres nats
    docker compose up -d authentik-server authentik-worker
    docker compose up -d integration-core
    docker compose up -d hub

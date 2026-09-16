@@ -6,7 +6,6 @@
 - `.env.example`
 - isolated Docker networks
 - PostgreSQL
-- Redis
 - authentik
 - BSYSTEM-HUB
 - Integration Core

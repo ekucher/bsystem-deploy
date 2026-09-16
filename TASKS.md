@@ -469,8 +469,9 @@ the above; `docker-compose.e2e.yml` is additionally started for real by the
 E2E job, so a capability set that breaks a container fails the build.
 
 Capabilities are left to the image's own entrypoint for authentik, and
-postgres and redis keep the five and four capabilities their entrypoints need
-to drop their own privileges. Those are documented at the services.
+postgres keeps the five capabilities its entrypoint needs to drop its own
+privileges. Those are documented at the service. Redis kept four for the same
+reason until the service was removed for want of anything using it.
 
 # P9 — Notifications
 
