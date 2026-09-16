@@ -1158,11 +1158,11 @@ Depends on: P19
 
 ## P20.2 Database correctness
 
-- [ ] inspect transaction boundaries and error handling
+- [x] inspect transaction boundaries and error handling
 - [x] verify uniqueness constraints close races rather than application checks
       alone
-- [ ] test rollback on partial failures
-- [ ] test concurrent startup/migration behavior
+- [x] test rollback on partial failures
+- [x] test concurrent startup/migration behavior
 - [ ] migration-from-zero plus upgrade from every practical historical schema
       level represented by the repository
 - [ ] inspect indexes against actual lookup/order/filter paths
@@ -1177,8 +1177,40 @@ way out as HTTP 400 with the table, column tuple and constraint name in the
 body. Eight racers, measured: six answered, two refused.
 
 The remaining P20.1 items (identity and service-identity races, scope grant and
-revoke, audit writes, adapter registry, shutdown in flight) and all of P20.2 are
-not yet done.
+revoke, audit writes, adapter registry, shutdown in flight) are not yet done.
+
+P20.2 found the worst of this wave. **Several Core instances could not start at
+once.** Four released together against a fresh database: three of the four did
+not boot, on every one of three runs, with
+
+```text
+create schema history: ERROR: duplicate key value violates unique
+constraint "pg_type_typname_nsp_index" (SQLSTATE 23505)
+```
+
+Migrations are written to be idempotent, which makes them safe to re-run and
+says nothing about running them simultaneously. `CREATE TABLE IF NOT EXISTS` is
+not atomic against another session creating the same table: the existence check
+and the creation do not share a lock, so both pass the check and one loses on an
+internal unique index. `Migrate` runs from `Open`, so it is a failure to start.
+
+That is the ordinary shape of a deployment — several replicas, a rolling
+restart, or everything returning at once after an outage — and a restart policy
+turns it into flapping containers rather than a report. On a stage acceptance it
+would have read as services that come up on the second or third try, with
+nobody able to say why. Fixed with a session-scoped advisory lock in
+`bsystem-integration-core#13`.
+
+Rollback on partial failure was covered by half: the existing case has the first
+write failing, where there is nothing to undo. The new one stores an event and
+then fails the status update. Worth recording what that test proves and what it
+cannot: it proves the two writes share a transaction, and it cannot prove the
+error handling around them, because PostgreSQL aborts a transaction at the first
+failed statement and discards the event either way. Dropping the error check
+leaves it green; splitting the writes across transactions is what fails it.
+
+Still open in P20.2: migration from every historical schema level, index
+evidence against real lookup paths, and the N+1 review.
 
 Definition of Done:
 - race detector green;
@@ -1194,19 +1226,44 @@ Depends on: P19
 
 For EspoCRM, Redmine and Outline, exercise:
 
-- [ ] slow response / context deadline
-- [ ] malformed JSON
-- [ ] truncated response body
-- [ ] oversized response body
-- [ ] connection reset / transport error
-- [ ] 401 / 403 / 404
-- [ ] 408 / 429
-- [ ] 500 / 502 / 503 / 504
-- [ ] valid and invalid `Retry-After`
-- [ ] cancellation while sleeping between retries
-- [ ] circuit breaker closed/open/half-open transitions under concurrent calls
-- [ ] recovery after a transient upstream outage
-- [ ] verify credentials never appear in returned errors, logs or metrics
+- [x] slow response / context deadline
+- [x] malformed JSON
+- [x] truncated response body
+- [x] oversized response body
+- [x] connection reset / transport error
+- [x] 401 / 403 / 404
+- [x] 408 / 429
+- [x] 500 / 502 / 503 / 504
+- [x] valid and invalid `Retry-After`
+- [x] cancellation while sleeping between retries
+- [x] circuit breaker closed/open/half-open transitions under concurrent calls
+- [x] recovery after a transient upstream outage
+- [x] verify credentials never appear in returned errors, logs or metrics
+
+`bsystem-integration-core#13` closed the one item that was genuinely open. The
+rest of this list was already covered by `internal/adapters/httpx`, and is
+marked on that basis rather than on new work — checking each clause honestly is
+the task, not adding tests to things that have them.
+
+The credential clause holds three ways: the error-message test refuses the key,
+the internal host, the database user, the request path and the word `Bearer`;
+the adapter packages log nothing at all, so there is no adapter log to leak
+through; and the metric labels are drawn from closed vocabularies and pinned by
+the metrics contract test.
+
+The finding was the circuit breaker under concurrency, and it was the worst kind
+— the breaker doing the opposite of its job at the one moment it exists for. A
+call still in flight when the circuit opened reported its outcome into whatever
+state the breaker had reached by the time it returned. A success arriving during
+half-open closed the circuit on evidence gathered before the upstream was even
+suspected, and, having reset the failure count on the way, left the real probe's
+failure one short of reopening it. The upstream was down, the probe had just
+proved it, and full traffic was flowing.
+
+It survived a file with fourteen cases, one of them named for concurrency,
+because every case admits a call and reports that same call's result
+immediately. That test exercised the mutex; the race detector was and is clean.
+The defect was in whose result the breaker listens to, not in how it reads it.
 
 Definition of Done:
 - failure behavior is deterministic and normalized;
@@ -1223,16 +1280,37 @@ Depends on: P19
 Goal: Spectral validates the document; this task validates that the document and
 running HTTP surface describe the same contract.
 
-- [ ] build an inventory of registered human and service routes
-- [ ] compare implemented method/path pairs with `bsystem-integration-core/docs/openapi.yaml`
-- [ ] fail CI on undocumented implemented public API routes
-- [ ] fail CI on documented routes with no implementation
-- [ ] verify important success and rejection status codes against handlers
-- [ ] verify documented query/path parameters exist in implementation
-- [ ] ensure normalized DTO/error envelope contract tests use OpenAPI examples or
+- [x] build an inventory of registered human and service routes
+- [x] compare implemented method/path pairs with `bsystem-integration-core/docs/openapi.yaml`
+- [x] fail CI on undocumented implemented public API routes
+- [x] fail CI on documented routes with no implementation
+- [x] verify important success and rejection status codes against handlers
+- [x] verify documented query/path parameters exist in implementation
+- [x] ensure normalized DTO/error envelope contract tests use OpenAPI examples or
       a generated schema validator where practical
-- [ ] keep health/metrics/internal exceptions explicit rather than silently
+- [x] keep health/metrics/internal exceptions explicit rather than silently
       ignored
+
+Seven of these eight were already enforced by
+`bsystem-integration-core/cmd/server/openapi_test.go`, which compares the route
+inventory in both directions, the authentication boundary, the failures each
+route documents, every emitted error code, success and rejection examples, and
+operational routes as explicit exceptions. It refused a change earlier in this
+wave until two new error codes were documented.
+
+The open one was parameters, added in `bsystem-integration-core#13`. Both
+directions held already, so it is a guard rather than a fix. Parameters fail
+more quietly than routes: a route that disappears gives a caller a 404, while a
+parameter that stops being read gives them a 200 and the wrong rows —
+`?severity=critical` returning every incident, with nothing anywhere saying the
+filter was ignored.
+
+Resolving `$ref` was not optional. Three parameters are declared only under
+`components`, `limit` and `cursor` among them, and `limit` appears on twelve
+routes. Reading the inline form alone would have made them invisible and the
+check would have passed because it never looked at them — the exact failure
+this wave keeps finding, and a poor thing to ship in the check written to stop
+it.
 
 Definition of Done:
 - adding/removing a public handler without updating OpenAPI fails CI;
