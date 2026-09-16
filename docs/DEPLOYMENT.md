@@ -30,6 +30,14 @@ admin interface on the open internet, discovered by somebody else.
 The stack serves plain HTTP; it is not the thing that should be facing the
 network.
 
+On the stage stack the variable is `STAGE_PUBLISH_ADDRESS`: the overlay
+replaces every port mapping, so `BIND_ADDRESS` is read by nothing there. The
+default is the same loopback either way, which is what makes the difference
+easy to miss — it shows up only when somebody tries to widen the exposure
+deliberately and sets the variable that does not govern.
+`scripts/stage-preflight.sh` fails on a stage stack published on every
+interface and warns when `BIND_ADDRESS` is set for one.
+
 ## Container hardening
 
 Every service sets `no-new-privileges` and drops `ALL` capabilities. Where an

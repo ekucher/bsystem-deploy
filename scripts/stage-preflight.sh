@@ -223,7 +223,21 @@ main() {
   require_var AUTHENTIK_SECRET_KEY secret
   require_var VITE_OIDC_AUTHORITY
   require_var VITE_OIDC_CLIENT_ID
-  optional_var BIND_ADDRESS
+  # The stage stack overrides every published port with STAGE_PUBLISH_ADDRESS.
+  # BIND_ADDRESS governs the base stack and is read by nothing here, so
+  # reporting on it would tell an operator their exposure is settled when the
+  # variable that settles it has not been looked at.
+  optional_var STAGE_PUBLISH_ADDRESS
+  case "${STAGE_PUBLISH_ADDRESS:-}" in
+    ''|127.0.0.1|localhost|::1|'[::1]') ;;
+    0.0.0.0|'::'|'[::]'|'*')
+      fail "STAGE_PUBLISH_ADDRESS is ${STAGE_PUBLISH_ADDRESS}: authentik, the Integration Core and the HUB are published on every interface" ;;
+    *)
+      warn "STAGE_PUBLISH_ADDRESS is ${STAGE_PUBLISH_ADDRESS}, not the loopback default; confirm that interface is behind the TLS proxy" ;;
+  esac
+  if [ -n "${BIND_ADDRESS:-}" ]; then
+    warn "BIND_ADDRESS is set but the stage overlay does not read it; STAGE_PUBLISH_ADDRESS is what publishes the stage ports"
+  fi
 
   if [ -n "${AUTHENTIK_SECRET_KEY:-}" ] && [ "${#AUTHENTIK_SECRET_KEY}" -lt 50 ]; then
     fail "AUTHENTIK_SECRET_KEY is shorter than the 50 characters authentik expects"

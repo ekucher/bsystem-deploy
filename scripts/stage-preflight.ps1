@@ -187,7 +187,23 @@ Test-RequiredVariable -Name 'POSTGRES_PASSWORD' -Kind secret
 Test-RequiredVariable -Name 'AUTHENTIK_SECRET_KEY' -Kind secret
 Test-RequiredVariable -Name 'VITE_OIDC_AUTHORITY'
 Test-RequiredVariable -Name 'VITE_OIDC_CLIENT_ID'
-Test-OptionalVariable -Name 'BIND_ADDRESS'
+# The stage stack overrides every published port with STAGE_PUBLISH_ADDRESS.
+# BIND_ADDRESS governs the base stack and is read by nothing here, so reporting
+# on it would tell an operator their exposure is settled when the variable that
+# settles it has not been looked at.
+Test-OptionalVariable -Name 'STAGE_PUBLISH_ADDRESS'
+$publish = Get-ConfigValue -Name 'STAGE_PUBLISH_ADDRESS'
+if ($publish) {
+    if ($publish -in @('0.0.0.0', '::', '[::]', '*')) {
+        Write-Fail "STAGE_PUBLISH_ADDRESS is ${publish}: authentik, the Integration Core and the HUB are published on every interface"
+    }
+    elseif ($publish -notin @('127.0.0.1', 'localhost', '::1', '[::1]')) {
+        Write-Warn "STAGE_PUBLISH_ADDRESS is ${publish}, not the loopback default; confirm that interface is behind the TLS proxy"
+    }
+}
+if (Get-ConfigValue -Name 'BIND_ADDRESS') {
+    Write-Warn 'BIND_ADDRESS is set but the stage overlay does not read it; STAGE_PUBLISH_ADDRESS is what publishes the stage ports'
+}
 
 $secretKey = Get-ConfigValue -Name 'AUTHENTIK_SECRET_KEY'
 if ($secretKey -and $secretKey.Length -lt 50) {
