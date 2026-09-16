@@ -30,6 +30,14 @@ admin interface on the open internet, discovered by somebody else.
 The stack serves plain HTTP; it is not the thing that should be facing the
 network.
 
+On the stage stack the variable is `STAGE_PUBLISH_ADDRESS`: the overlay
+replaces every port mapping, so `BIND_ADDRESS` is read by nothing there. The
+default is the same loopback either way, which is what makes the difference
+easy to miss — it shows up only when somebody tries to widen the exposure
+deliberately and sets the variable that does not govern.
+`scripts/stage-preflight.sh` fails on a stage stack published on every
+interface and warns when `BIND_ADDRESS` is set for one.
+
 ## Container hardening
 
 Every service sets `no-new-privileges` and drops `ALL` capabilities. Where an
@@ -43,10 +51,12 @@ owner-run pass against a real deployment rather than in an unverified guess
 committed here.
 
 `scripts/check-hardening.py` runs in CI and fails on a regression in any of
-this. Trivy's misconfiguration scanner has no Docker Compose rules, so that
-script — not the scanner — is what keeps the settings from drifting. The E2E
-stack is additionally started for real on every push, so a capability set that
-breaks a container fails the build rather than production.
+this — including the read-only root filesystems, which it did not check until
+the paragraph above was compared against it. Trivy's misconfiguration scanner
+has no Docker Compose rules, so that script — not the scanner — is what keeps
+the settings from drifting. The E2E stack is additionally started for real on
+every push, so a capability set that breaks a container fails the build rather
+than production.
 
 See [`../SECURITY.md`](../SECURITY.md) for the current per-service state.
 

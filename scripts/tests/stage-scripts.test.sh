@@ -52,7 +52,7 @@ POSTGRES_PASSWORD=$FIXTURE_DB_PASSWORD
 AUTHENTIK_SECRET_KEY=$FIXTURE_AUTHENTIK_KEY
 VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub/
 VITE_OIDC_CLIENT_ID=hub-public-client
-BIND_ADDRESS=127.0.0.1
+STAGE_PUBLISH_ADDRESS=127.0.0.1
 ENV
 
 output="$(env -i PATH="$PATH" HOME="$HOME" NO_COLOR=1 ENV_FILE="$WORK/env.good" SKIP_NETWORK=1 SKIP_DOCKER=1 bash scripts/stage-preflight.sh 2>&1)"
@@ -299,6 +299,150 @@ fi
 printf 'entries: []\n' > "$GROUPS_WORK/authentik/blueprints/bsystem-groups.yaml"
 (cd "$GROUPS_WORK" && ./scripts/check-identity-groups.py >/dev/null 2>&1)
 check "$?" "1" "an empty blueprint fails rather than matching an empty set"
+
+# --- check-hardening.py ------------------------------------------------------
+#
+# This script is the only thing keeping the container hardening in place:
+# Trivy has no Compose rules, and losing a setting breaks nothing at runtime,
+# so a regression is invisible until somebody is exploiting it. It renders the
+# stacks with Docker, which CI has and a contributor's machine may not, so it
+# is exercised here through --rendered against fixtures.
+
+HARD_WORK="$WORK/hardening"
+mkdir -p "$HARD_WORK"
+
+# A stack shaped like the real one: hardened, read-only where it should be,
+# and publishing only on the loopback address.
+write_rendered() {
+  cat > "$HARD_WORK/rendered.yml" <<YAML
+services:
+  postgres:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN"]
+  authentik-server:
+    security_opt: ["no-new-privileges:true"]
+  integration-core:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: ${1:-true}
+    ports:
+      - host_ip: "${2:-127.0.0.1}"
+        published: "8080"
+YAML
+}
+
+write_rendered
+python3 scripts/check-hardening.py --rendered "$HARD_WORK/rendered.yml" >/dev/null 2>&1
+check "$?" "0" "a hardened stack passes"
+
+# The property docs/DEPLOYMENT.md states and nothing was checking.
+write_rendered false
+hard_output="$(python3 scripts/check-hardening.py --rendered "$HARD_WORK/rendered.yml" 2>&1)"
+check "$?" "1" "a stateless service losing read_only is caught"
+if contains "$hard_output" "integration-core does not run on a read-only root filesystem"; then
+  ok "the read-only failure names the service"
+else
+  bad "the read-only failure does not name the service: $hard_output"
+fi
+
+write_rendered true "0.0.0.0"
+python3 scripts/check-hardening.py --rendered "$HARD_WORK/rendered.yml" >/dev/null 2>&1
+check "$?" "1" "a port published on every interface is caught"
+
+# The failure this script cannot see in its own output: nothing to check reads
+# exactly like nothing wrong. A renamed file or an overlay checked alone gets
+# here.
+printf 'services: {}\n' > "$HARD_WORK/empty.yml"
+empty_output="$(python3 scripts/check-hardening.py --rendered "$HARD_WORK/empty.yml" 2>&1)"
+check "$?" "1" "a stack that renders no service fails rather than passing vacuously"
+if contains "$empty_output" "vacuously"; then
+  ok "the empty-stack failure says why an OK would have been wrong"
+else
+  bad "the empty-stack failure is unclear: $empty_output"
+fi
+
+# An exemption that stops being needed must be removed rather than left to rot:
+# a silent exemption is how a service comes to look checked.
+cat > "$HARD_WORK/exempt.yml" <<'YAML'
+services:
+  authentik-server:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+YAML
+python3 scripts/check-hardening.py --rendered "$HARD_WORK/exempt.yml" >/dev/null 2>&1
+check "$?" "1" "a service that no longer needs its capability exemption is caught"
+# --- which variable actually publishes the stage ports -----------------------
+#
+# The stage overlay replaces every port mapping with STAGE_PUBLISH_ADDRESS.
+# BIND_ADDRESS governs the base stack and is read by nothing in stage, so a
+# preflight that reported on it was answering a question about exposure by
+# looking at a variable that does not decide it.
+
+preflight() {
+  env -i PATH="$PATH" HOME="$HOME" NO_COLOR=1 ENV_FILE="$1" \
+    SKIP_NETWORK=1 SKIP_DOCKER=1 bash scripts/stage-preflight.sh 2>&1
+}
+
+write_publish_fixture() {
+  cat > "$WORK/env.publish" <<ENV
+POSTGRES_PASSWORD=$FIXTURE_DB_PASSWORD
+AUTHENTIK_SECRET_KEY=$FIXTURE_AUTHENTIK_KEY
+VITE_OIDC_AUTHORITY=https://id.acceptance.invalid/application/o/bsystem-hub/
+VITE_OIDC_CLIENT_ID=hub-public-client
+$1
+ENV
+}
+
+# A stage stack published on every interface is the failure this script exists
+# to catch, and it was the one configuration it never looked at.
+write_publish_fixture "STAGE_PUBLISH_ADDRESS=0.0.0.0"
+publish_output="$(preflight "$WORK/env.publish")"
+check "$?" "1" "publishing the stage stack on every interface blocks the preflight"
+if contains "$publish_output" "published on every interface"; then
+  ok "the exposure failure says what is exposed"
+else
+  bad "the exposure failure is unclear: $publish_output"
+fi
+
+# A named interface is a deliberate act rather than a mistake: warn, do not block.
+write_publish_fixture "STAGE_PUBLISH_ADDRESS=10.0.0.7"
+publish_output="$(preflight "$WORK/env.publish")"
+check "$?" "0" "a named interface warns rather than blocking"
+if contains "$publish_output" "WARN"; then
+  ok "a non-loopback interface is warned about"
+else
+  bad "a non-loopback interface passed silently: $publish_output"
+fi
+
+# Setting the base stack's variable and believing it applies here is the
+# mistake the old preflight actively encouraged by reporting on it.
+write_publish_fixture "BIND_ADDRESS=0.0.0.0"
+publish_output="$(preflight "$WORK/env.publish")"
+if contains "$publish_output" "the stage overlay does not read it"; then
+  ok "setting BIND_ADDRESS for a stage deployment is called out"
+else
+  bad "BIND_ADDRESS was accepted as if it governed stage: $publish_output"
+fi
+
+# The two runners must agree, or an operator on Windows gets a different answer
+# about the same deployment.
+for runner in scripts/stage-preflight.sh scripts/stage-preflight.ps1; do
+  if grep -q "STAGE_PUBLISH_ADDRESS" "$runner"; then
+    ok "$(basename "$runner") checks STAGE_PUBLISH_ADDRESS"
+  else
+    bad "$(basename "$runner") does not check STAGE_PUBLISH_ADDRESS"
+  fi
+done
+
+# The acceptance document is what an operator reads to find out which variable
+# to set. It named the one that does nothing here.
+if grep -q "STAGE_PUBLISH_ADDRESS" docs/STAGE-ACCEPTANCE.md; then
+  ok "the stage acceptance table names STAGE_PUBLISH_ADDRESS"
+else
+  bad "the stage acceptance table does not name STAGE_PUBLISH_ADDRESS"
+fi
+
 
 echo
 printf '%d passed, %d failed\n' "$PASSED" "$FAILED"

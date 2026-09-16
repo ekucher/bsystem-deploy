@@ -61,7 +61,10 @@ not run in CI, and authentik in particular is left to the image's entrypoint
 rather than given an unverified capability set.
 
 Published ports bind to `${BIND_ADDRESS:-127.0.0.1}`, so bringing the stack
-up on a host with a public interface does not expose it by default.
+up on a host with a public interface does not expose it by default. The stage
+overlay replaces every port mapping and reads `${STAGE_PUBLISH_ADDRESS:-127.0.0.1}`
+instead — same default, different variable, and `BIND_ADDRESS` does nothing
+there.
 
 ## AI deployment
 

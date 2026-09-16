@@ -29,8 +29,16 @@ python3 scripts/check-identity-groups.py
 
 `check-hardening.py` is the one that will surprise you. Trivy's
 misconfiguration scanner has no Docker Compose rules, so that script is what
-stops a service quietly losing `no-new-privileges`, regaining capabilities, or
-publishing a port on every interface.
+stops a service quietly losing `no-new-privileges`, regaining capabilities,
+losing its read-only root filesystem, or publishing a port on every interface.
+None of those break anything at runtime, which is the whole problem: the
+container starts and serves, and the setting is missed only by whoever is
+exploiting it.
+
+It renders the stacks with Docker. If you have none, `--rendered FILE` checks
+an already-rendered stack, which is how `scripts/tests/stage-scripts.test.sh`
+exercises it — so the script's own logic is covered on every push whether or
+not the job that renders can run.
 
 `check-identity-groups.py` covers the one mistake the E2E stack cannot catch,
 because the stack replaces authentik with a mock. A BSYSTEM group name is

@@ -55,7 +55,8 @@ Classification:
 
 | Variable | Class | Required | Default | Notes |
 | --- | --- | --- | --- | --- |
-| `BIND_ADDRESS` | public config | optional | `127.0.0.1` | Interface the stack publishes on. Leave as the loopback default behind a TLS proxy; widening it is a deliberate act. |
+| `STAGE_PUBLISH_ADDRESS` | public config | optional | `127.0.0.1` | Interface **the stage stack** publishes authentik, the Core and the HUB on. Leave as the loopback default behind a TLS proxy; widening it is a deliberate act, and `scripts/stage-preflight.sh` fails on `0.0.0.0`. |
+| `BIND_ADDRESS` | public config | not read in stage | — | Governs the **base** stack only. The stage overlay replaces every port mapping, so setting this here changes nothing; the preflight warns if you have. |
 | `POSTGRES_PASSWORD` | **secret** | **required** | — | Also embedded in the Core's `DATABASE_URL` by Compose. |
 | `AUTHENTIK_SECRET_KEY` | **secret** | **required** | — | ≥50 random characters. Rotating it invalidates existing sessions. |
 | `VITE_OIDC_AUTHORITY` | public config | **required** | — | Browser-visible issuer URL. Baked into the HUB **at build time**, not read at runtime. |
