@@ -12,7 +12,8 @@ flowchart TB
     harness["E2E harness<br/>(e2e/, Go, no dependencies)"]
 
     subgraph stack["docker-compose.e2e.yml"]
-        core["Integration Core"]
+        core["Integration Core<br/>:8080"]
+        partial["Integration Core<br/>no Outline configured<br/>:8081"]
         identity["mock-identity<br/>:9000"]
         espocrm["mock-espocrm<br/>:8090"]
         redmine["mock-redmine<br/>:8091"]
@@ -22,6 +23,7 @@ flowchart TB
     end
 
     harness -->|"normalized API"| core
+    harness -->|"partial deployment"| partial
     harness -->|"fault injection"| espocrm
     harness -->|"fault injection"| redmine
     harness -->|"fault injection"| outline
@@ -33,7 +35,21 @@ flowchart TB
     core --> outline
     core --> nats
     core --> postgres
+
+    partial --> identity
+    partial --> espocrm
+    partial --> redmine
+    partial --> nats
+    partial --> postgres
 ```
+
+A second Integration Core runs from the same image against the same database
+with `OUTLINE_URL` deliberately absent. A deployment that leaves an integration
+out is a supported configuration, and it is the one a stage acceptance is most
+likely to meet — a customer who runs no wiki, or an environment brought up
+before the Outline credentials exist. Running one every time is what turns
+"the platform starts without Outline" from an assumption into something the
+stack demonstrates. Do not "fix" that service by giving it Outline settings.
 
 authentik, EspoCRM, Redmine and Outline are each replaced by a deterministic
 mock. The HUB is not part of the stack: the scenarios assert the normalized API
@@ -93,6 +109,7 @@ expected to actually run.
 | --- | --- | --- |
 | `E2E_REQUIRED` | unset — scenarios may skip | Set to any value where a skip must be a failure instead |
 | `E2E_BASE_URL` | none — unset skips every scenario, unless `E2E_REQUIRED` is set | Integration Core |
+| `E2E_PARTIAL_BASE_URL` | `http://127.0.0.1:8081` | the Integration Core with Outline unconfigured |
 | `E2E_IDENTITY_URL` | `http://127.0.0.1:9000` | identity mock |
 | `E2E_ESPOCRM_URL` | `http://127.0.0.1:8090` | CRM mock control plane |
 | `E2E_REDMINE_URL` | `http://127.0.0.1:8091` | Redmine mock control plane |

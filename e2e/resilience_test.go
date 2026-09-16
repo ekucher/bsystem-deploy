@@ -246,3 +246,115 @@ func TestCircuitOpensUnderSustainedFailure(t *testing.T) {
 		t.Fatal("the circuit did not close after the upstream recovered")
 	}
 }
+
+// A deployment that does not use one of the integrations is a supported
+// configuration, not a fault, and it is the one a stage acceptance is most
+// likely to meet — a customer who runs no wiki, or an environment brought up
+// before the Outline credentials exist.
+//
+// Nothing in this stack proved the platform survives it. The single core has
+// every adapter configured, so "starts without Outline" was an assumption
+// about a deployment nobody had ever run. The stack now runs one: a second
+// Integration Core, same image, same database, with OUTLINE_URL absent.
+//
+// What must hold is that the missing integration is contained. The process
+// starts, readiness passes, the other integrations serve normally, and the one
+// that is absent says so with a stable code — not a 500, and not the "does not
+// support this capability" answer, which reads as a permanent limit of the
+// product rather than an environment variable nobody set.
+func TestACoreWithAnUnconfiguredAdapterStartsAndSaysSo(t *testing.T) {
+	harness := ready(t)
+
+	// The partial core is a separate process with its own startup. Waiting on
+	// its readiness is not incidental to the scenario — starting at all is
+	// half of what is being proved.
+	deadline := time.Now().Add(60 * time.Second)
+	var readiness Response
+	for {
+		response, err := harness.Do(http.MethodGet, harness.Partial+"/readyz", "", nil)
+		if err == nil && response.Status == http.StatusOK {
+			readiness = response
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the core with no Outline configuration never became ready: %v (last status: %d)", err, response.Status)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	var state struct {
+		Status string            `json:"status"`
+		Checks map[string]string `json:"checks"`
+	}
+	readiness.JSON(t, &state)
+	if state.Status != "ready" {
+		t.Errorf("readiness status = %q, want ready (checks: %v)", state.Status, state.Checks)
+	}
+
+	// The absent integration.
+	documents, err := harness.Do(http.MethodGet, harness.Partial+"/api/v1/documents", TokenAdmin, nil)
+	if err != nil {
+		t.Fatalf("GET documents from the partial core: %v", err)
+	}
+	if documents.Status != http.StatusServiceUnavailable {
+		t.Fatalf("GET /api/v1/documents: status = %d, want %d (body: %s)", documents.Status, http.StatusServiceUnavailable, truncate(documents.Body))
+	}
+	var failure struct {
+		Error  string `json:"error"`
+		Code   string `json:"code"`
+		Source string `json:"source"`
+	}
+	documents.JSON(t, &failure)
+	if failure.Code != "adapter_not_configured" {
+		t.Errorf("error code = %q, want %q (body: %s)", failure.Code, "adapter_not_configured", truncate(documents.Body))
+	}
+	if failure.Source != "outline" {
+		t.Errorf("error source = %q, want %q", failure.Source, "outline")
+	}
+
+	// The integrations that are configured must be unaffected. A platform that
+	// refuses everything because one integration is missing is not a partial
+	// deployment, it is a broken one.
+	for _, path := range []string{"/api/v1/clients", "/api/v1/contacts", "/api/v1/projects", "/api/v1/issues"} {
+		response, err := harness.Do(http.MethodGet, harness.Partial+path, TokenAdmin, nil)
+		if err != nil {
+			t.Fatalf("GET %s from the partial core: %v", path, err)
+		}
+		if response.Status != http.StatusOK {
+			t.Errorf("GET %s: status = %d, want 200 (body: %s)", path, response.Status, truncate(response.Body))
+		}
+	}
+
+	// The registry describes the whole intended surface rather than omitting
+	// what is not configured, so an operator can tell "disabled" from "this
+	// build has no such integration".
+	health, err := harness.Do(http.MethodGet, harness.Partial+"/api/service/v1/adapters/health", TokenService, nil)
+	if err != nil {
+		t.Fatalf("GET adapter health from the partial core: %v", err)
+	}
+	if health.Status != http.StatusOK {
+		t.Fatalf("GET /api/service/v1/adapters/health: status = %d, want 200 (body: %s)", health.Status, truncate(health.Body))
+	}
+	var report map[string]struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}
+	health.JSON(t, &report)
+	outline, present := report["outline"]
+	if !present {
+		t.Fatalf("outline is missing from the partial core's health report rather than being reported disabled: %+v", report)
+	}
+	if outline.Status != "disabled" {
+		t.Errorf("outline status = %q (%s), want disabled", outline.Status, outline.Message)
+	}
+	for _, adapter := range []string{"espocrm", "redmine"} {
+		if state := report[adapter].Status; state != "ready" {
+			t.Errorf("adapter %s status = %q on the partial core, want ready", adapter, state)
+		}
+	}
+
+	// The fully configured core is a separate process and must be untouched by
+	// any of this.
+	if response := harness.API(t, http.MethodGet, "/api/v1/documents", TokenAdmin, nil); response.Status != http.StatusOK {
+		t.Errorf("the configured core's documents read = %d, want 200 (body: %s)", response.Status, truncate(response.Body))
+	}
+}
