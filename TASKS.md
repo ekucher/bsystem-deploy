@@ -1519,16 +1519,50 @@ Depends on: P19
 
 Automate checks for facts that currently exist in more than one place:
 
-- [ ] documented env vars vs Compose/runtime env vars
-- [ ] documented published ports vs Compose rendered ports
-- [ ] documented service names vs Compose service names
-- [ ] authentik blueprint groups vs mock identity groups vs RBAC seed mappings
-- [ ] Global ID prefixes/types vs implementation
+- [x] documented env vars vs Compose/runtime env vars
+      — `scripts/check-config-docs.py`, and it found seven variables the stacks
+      read that `.env.example` never mentioned. One of them is
+      `STAGE_PUBLISH_ADDRESS`, which is what decides whether stage is exposed:
+      the file an operator copies documented `BIND_ADDRESS`, which does nothing
+      in stage, and was silent about the variable that does. That is the same
+      defect `deploy#12` fixed in the preflight, one place further along — the
+      question was worth asking again. All seven are now documented, the
+      optional ones commented out with their defaults, and a commented
+      assignment counts as declared because that is how an optional setting is
+      presented
+- [x] documented published ports vs Compose rendered ports
+      — same script. A document telling somebody to open a port nothing
+      publishes costs them twenty minutes and some of their trust in the rest
+      of the document. No drift today; the guard is what keeps it so
+- [x] documented service names vs Compose service names
+      — same script. The first version of the pattern read past the closing
+      backtick and reported the prose word "must" as a service, from
+      `docker compose up -d --build` followed by "must be smoke-tested". A
+      pattern that reaches into the sentence around a command will keep finding
+      services in English, so it is now anchored inside the backtick span
+- [x] authentik blueprint groups vs mock identity groups vs RBAC seed mappings
+      — already closed by `scripts/check-identity-groups.py`, which compares
+      the blueprint, the identity mock and the platform's RBAC seed
+- [x] Global ID prefixes/types vs implementation
+      — `scripts/check-global-ids.py`, comparing the rules in CLAUDE.md against
+      the counters seed in Integration Core, in both directions. A prefix
+      documented but never seeded allocates nothing, and a prefix seeded but
+      never documented is worse, because a Global ID that ships is permanent.
+      It reads every migration, not the first: `SVC` is seeded by 002, and a
+      version limited to 001 reports the service prefix as unseeded — verified
+      by running it that way. Wired into the E2E job rather than Stage assets,
+      because only that job checks out Core; anywhere else it would print a
+      note and pass, which is the vacuous green this wave keeps finding
+- [x] metric names/types documented vs emitted
+      — already closed by the metrics contract test in Integration Core
 - [ ] adapter capability names vs registry/implementation/docs
-- [ ] metric names/types documented vs emitted
 - [ ] route names/endpoints in docs vs OpenAPI
-- [ ] documented file/script paths exist
+- [x] documented file/script paths exist
+      — already closed by `scripts/check-doc-links.py`
 - [ ] stale references to removed services/dependencies fail CI
+      — partly: a removed service is caught the moment a document names it in a
+      Compose command, and a removed file the moment a document links to it.
+      A dependency dropped from a manifest but still described in prose is not
 
 Definition of Done:
 - at least the high-risk duplicated facts are machine-checked;
