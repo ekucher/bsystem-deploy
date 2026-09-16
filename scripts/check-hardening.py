@@ -163,19 +163,23 @@ def main(arguments):
         for stack in [argument.split("+") for argument in arguments]:
             checked.append(inspect(" + ".join(stack), render(stack), failures, seen))
 
+    # Findings first. A vacuity guard that returns before them answers a
+    # different question than the caller asked: a stack with real hardening
+    # failures and no bind mount would print only "nothing was examined", and
+    # the failures it did find would never be seen.
+    for failure in failures:
+        print("FAIL: %s" % failure)
+    if failures:
+        return 1
+
     # As with the empty stack above: if no stack rendered a bind mount, the
     # read-only check ran over nothing and its silence means nothing. Every
-    # stack checked here carries at least one.
+    # stack this repository ships carries at least one.
     if not seen.get("binds"):
         print(
             "no bind mount was examined; the read-only bind check proves nothing",
             file=sys.stderr,
         )
-        return 1
-
-    for failure in failures:
-        print("FAIL: %s" % failure)
-    if failures:
         return 1
     # The counts are printed because they are what a reader can sanity-check:
     # a stack that silently shrank still says OK.

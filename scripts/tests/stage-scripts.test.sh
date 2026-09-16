@@ -326,6 +326,11 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
     read_only: ${1:-true}
+    volumes:
+      - type: bind
+        source: /repo/postgres/init
+        target: /docker-entrypoint-initdb.d
+        read_only: ${3:-true}
     ports:
       - host_ip: "${2:-127.0.0.1}"
         published: "8080"
@@ -372,6 +377,35 @@ services:
 YAML
 python3 scripts/check-hardening.py --rendered "$HARD_WORK/exempt.yml" >/dev/null 2>&1
 check "$?" "1" "a service that no longer needs its capability exemption is caught"
+
+# A bind mount is a handle on the host filesystem, and every one in these
+# stacks carries configuration or seed data inward. They were all :ro before
+# anything checked; dropping :ro is a two-character edit that renders and runs.
+write_rendered true "127.0.0.1" false
+bind_output="$(python3 scripts/check-hardening.py --rendered "$HARD_WORK/rendered.yml" 2>&1)"
+check "$?" "1" "a writable bind mount is caught"
+if contains "$bind_output" "/repo/postgres/init"; then
+  ok "the writable-bind failure names the mount"
+else
+  bad "the writable-bind failure does not name the mount: $bind_output"
+fi
+
+# The same blindness as the empty stack, one level down: a stack with no bind
+# mount runs the read-only bind check over nothing, and silence reads exactly
+# like a pass.
+cat > "$HARD_WORK/nobinds.yml" <<'YAML'
+services:
+  nats:
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+YAML
+nobind_output="$(python3 scripts/check-hardening.py --rendered "$HARD_WORK/nobinds.yml" 2>&1)"
+check "$?" "1" "a stack with no bind mount fails rather than passing vacuously"
+if contains "$nobind_output" "proves nothing"; then
+  ok "the missing-bind failure says why an OK would have been wrong"
+else
+  bad "the missing-bind failure is unclear: $nobind_output"
+fi
 # --- which variable actually publishes the stage ports -----------------------
 #
 # The stage overlay replaces every port mapping with STAGE_PUBLISH_ADDRESS.
