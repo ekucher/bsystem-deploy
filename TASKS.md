@@ -1659,17 +1659,49 @@ Depends on: P18-P26
 This remains autonomous preparation only. Do not deploy to a real environment
 and do not request production secrets merely to complete it.
 
-- [ ] re-run an independent review of `docker-compose.stage.yml`, preflight,
+- [x] re-run an independent review of `docker-compose.stage.yml`, preflight,
       smoke runner, release manifest and acceptance report generation
-- [ ] ensure every remaining real-environment prerequisite is represented as a
+      — reviewed clause by clause. The stage overlay renders clean through the
+      hardening checker with every bind read-only; the preflight refuses an
+      exposure mistake and reads the variable that actually controls the stage
+      mapping; the release manifest generates in CI; the acceptance report is
+      produced by the smoke runner
+- [x] ensure every remaining real-environment prerequisite is represented as a
       clear BLOCKED item rather than a guessed value
-- [ ] verify stage preflight cannot print secrets in success or failure paths
-- [ ] verify smoke checks are read-only and cannot mutate upstream systems
-- [ ] verify rollback and backup/restore instructions match the actual current
+      — fifteen `[!]` items, all present and none carrying an invented value.
+      `docs/HANDOFF.md` lists them in execution order
+- [x] verify stage preflight cannot print secrets in success or failure paths
+      — the bearer token travels in a `--header` argument, the response body
+      goes to `/dev/null`, and no failure path echoes either. The way that
+      would break is shell tracing, which echoes the whole invocation including
+      the Authorization header; a test now refuses `set -x` in the preflight and
+      both smoke runners
+- [x] verify smoke checks are read-only and cannot mutate upstream systems
+      — true by construction today: every call is a default GET with no body.
+      Nothing held it, and adding `-X POST` to a check is a small edit that
+      would look like more thorough smoke testing. A test now refuses a
+      mutating method, a request body or an upload on any line that invokes
+      curl. The first version of that pattern roamed the whole file and matched
+      `[ -d "$dir/.git" ]` — a shell directory test — as if it were curl's
+      `--data`; a pattern about a command has to be anchored to that command
+- [x] verify rollback and backup/restore instructions match the actual current
       stack after P18-P26
-- [ ] verify all example hosts/IPs/credentials are reserved placeholders
-- [ ] produce a final autonomous handoff report with exact owner actions in
+      — checked against what this wave changed. The base stack is untouched:
+      the only new service, `integration-core-no-outline`, exists solely in the
+      E2E stack, and `docs/E2E-ENVIRONMENT.md` documents it. No rollback or
+      restore instruction enumerates a service that no longer exists
+- [x] verify all example hosts/IPs/credentials are reserved placeholders
+      — they are: `.example` under RFC 2606, `.local`, and only loopback or
+      unspecified addresses. Nothing held that either, so the check now refuses
+      a hostname outside the reserved spaces and an address that is neither
+      loopback, private, nor RFC 5737 documentation. A runbook is copied, and a
+      real hostname in one sends somebody's traffic to a stranger
+- [x] produce a final autonomous handoff report with exact owner actions in
       execution order
+      — `docs/HANDOFF.md`. Ordered by what each item unblocks rather than by
+      where it appeared in this file, because an ordered list without that is a
+      queue rather than a plan. It also records the two things this wave could
+      not demonstrate, so they are not mistaken for oversights
 
 Definition of Done:
 - all non-owner-dependent stage preparation is green and reproducible;
