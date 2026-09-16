@@ -52,6 +52,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: loadtest/go.mod
+          cache: false
+
       - name: Prepare CI environment
         run: |
           cat > .env <<'EOF'
@@ -70,6 +76,17 @@ jobs:
 
       - name: Validate rendered configuration
         run: docker compose config > /tmp/bsystem-compose.yml
+
+      - name: Check the load harness compiles
+        run: |
+          cd loadtest
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt required for: $unformatted"
+            exit 1
+          fi
+          go vet ./...
+          go build ./...
 
       - name: Check container hardening
         env:
