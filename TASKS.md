@@ -536,18 +536,18 @@ server.error
 
 Priority: MEDIUM
 
-- [ ] Incident
-- [ ] Request
-- [ ] SLA state
-- [ ] Severity
-- [ ] Status
-- [ ] relations to CL/SRV/PR/TSK/BUG/DOC
-- [ ] additive migration
-- [ ] repository layer
-- [ ] audit
-- [ ] list/detail/create/update API
-- [ ] tests
-- [ ] incident.created/updated/resolved events
+- [-] Incident
+- [-] Request
+- [-] SLA state
+- [-] Severity
+- [-] Status
+- [-] relations to CL/SRV/PR/TSK/BUG/DOC
+- [-] additive migration
+- [-] repository layer
+- [-] audit
+- [-] list/detail/create/update API
+- [-] tests
+- [-] incident.created/updated/resolved events
 
 # P13 — AI Gateway skeleton
 
