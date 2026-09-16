@@ -442,15 +442,15 @@ see `bsystem-integration-core/docs/NOTIFICATIONS.md`.
 
 Priority: MEDIUM
 
-- [ ] normalized searchable entity
-- [ ] type/title/summary/source/tenant/permissions/timestamp
-- [ ] provider abstraction
-- [ ] in-memory test provider
-- [ ] OpenSearch adapter skeleton
-- [ ] `GET /api/v1/search`
-- [ ] query/type filter/pagination
-- [ ] authorization filtering
-- [ ] index/update/delete event contracts
+- [-] normalized searchable entity
+- [-] type/title/summary/source/tenant/permissions/timestamp
+- [-] provider abstraction
+- [-] in-memory test provider
+- [-] OpenSearch adapter skeleton
+- [-] `GET /api/v1/search`
+- [-] query/type filter/pagination
+- [-] authorization filtering
+- [-] index/update/delete event contracts
 
 # P11 — Operations foundation
 
