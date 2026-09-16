@@ -410,18 +410,33 @@ to drop their own privileges. Those are documented at the services.
 
 Priority: MEDIUM
 
-- [-] persistence model
-- [-] recipient/severity/source/title/body/deep-link/read-state
-- [-] `GET /api/v1/notifications`
-- [-] mark-read endpoint
-- [-] pagination
-- [-] authorization
-- [-] event mappings for backup/test/build/incident failures
-- [-] HUB notification center
-- [-] unread badge
-- [-] deep links
+- [x] persistence model — `notifications` and `notification_reads`, migration 004
+- [x] recipient/severity/source/title/body/deep-link/read-state
+- [x] `GET /api/v1/notifications`
+- [x] mark-read endpoint — `POST /api/v1/notifications/{id}/read`
+- [x] pagination — keyset on the notification id, not an offset: the store is
+      append-heavy at the head, so an offset cursor would shift every later
+      page on each arrival
+- [x] authorization — addressed to a Global user ID or to a permission,
+      resolved from RBAC at read time; a scope-confined principal reads only
+      what names it
+- [x] event mappings for backup/test/build/incident failures — six events;
+      everything else raises nothing
+- [x] HUB notification center — `/notifications`
+- [x] unread badge — count from the collection envelope, polled
+- [x] deep links — only for entity types the HUB has a page for
 
 Do not invent production recipients.
+
+None were invented. A notification is addressed either to a Global user ID the
+publisher named and the platform verified, or to a permission — and who
+satisfies a permission is resolved from RBAC when the notification is read, so
+the platform never stores a guess about who a failed backup concerns.
+
+The E2E suite found `test.failed` addressed to `qa.report.read`, which only the
+Manager role holds: the QA team would never have seen it and nothing would have
+failed. It is now addressed to `qa.testcase.read`. No RBAC grant was widened —
+see `bsystem-integration-core/docs/NOTIFICATIONS.md`.
 
 # P10 — Search
 
