@@ -232,8 +232,11 @@ procedure in [`BACKUP-RESTORE.md`](BACKUP-RESTORE.md).
 3. **`CREATE INDEX` is not concurrent.** Irrelevant on an empty database; on a
    populated `audit_events` it would block writes. Recorded rather than
    quietly changed.
-4. **NATS absence is silent.** `/readyz` reports `nats: degraded` and the
-   platform serves; events are dropped, not queued.
+4. **NATS absence is partly silent.** `/readyz` reports `nats: degraded` and
+   the platform serves. The three identity and Global ID allocation events are
+   queued in the platform's own database and delivered when the broker
+   returns; every other event produced during the outage is dropped. See
+   `bsystem-integration-core/docs/EVENTS.md` for which is which and why.
 5. **The E2E stack does not include the HUB.** It asserts the normalized API
    contract the HUB consumes.
 6. **No ESLint in the HUB.** `typescript-eslint` does not support TypeScript 7.

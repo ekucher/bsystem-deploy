@@ -1873,24 +1873,113 @@ implicit in a successful NATS publish call.
 
 ## P29.1 Semantics decision from existing architecture
 
-- [ ] inventory every event publisher and consumer contract
-- [ ] document current delivery semantics: loss window, duplication window,
+- [x] inventory every event publisher and consumer contract
+      — seven publishers, and the inventory found two defects rather than a
+      clean picture. **Three of the seven did not use the subject
+      convention**: `identity.created`, `service_identity.created` and
+      `global_id.created` went to bare subjects instead of `bsystem.events.*`,
+      so a consumer subscribed to `bsystem.events.>` — which the convention,
+      the documentation and the E2E harness all use — had never received one
+      of them. The metric counted them published; nothing conforming could
+      see them. **The Global ID handler announced every allocation call**,
+      including the two paths that return an identifier which already existed,
+      so asking twice for one source record announced two creations of a thing
+      created once
+- [x] document current delivery semantics: loss window, duplication window,
       ordering scope and behavior while NATS is unavailable
-- [ ] decide, based on current product invariants, which events may be best-effort
-      and which require durable delivery; do not invent a business promise
-- [ ] give every durable event an immutable event ID and stable occurred-at time
-- [ ] document idempotency expectations for consumers
+      — a table of both, in `bsystem-integration-core/docs/EVENTS.md`
+- [x] decide, based on current product invariants, which events may be
+      best-effort and which require durable delivery; do not invent a business
+      promise
+      — decided by one question, and no new promise: **can a consumer that
+      missed this event recover what it says by reading the platform
+      afterwards?** For the support and operations events, yes — the record
+      stays readable, so a missed event costs a notification and not a fact.
+      For the three allocation events, no: each announces something that
+      happens exactly once in the lifetime of a subject, no later event
+      restates it, and a consumer cannot tell "I missed it" from "it never
+      happened"
+- [x] give every durable event an immutable event ID and stable occurred-at
+      time
+      — `event_id` on every envelope, best-effort ones included, minted by the
+      platform and never by the publisher: a caller-supplied id would let one
+      service claim another's and make a consumer discard a real event as a
+      duplicate. `occurred_at` is when the thing happened, so an event
+      delivered after a two-hour outage does not sort as though it happened
+      after it
+- [x] document idempotency expectations for consumers
+      — one sentence of contract: a consumer that sees the same `event_id`
+      twice has seen the same event twice. The platform does not promise
+      exactly-once delivery; it promises an identifier that makes exactly-once
+      *processing* possible
 
 ## P29.2 Durable path where required
 
-- [ ] if any existing event is required for correctness/audit/notification state,
-      implement a transactional outbox or equivalent DB-backed durable queue
-- [ ] publish outbox rows to JetStream with bounded retry/backoff
-- [ ] mark delivery only after broker acknowledgement
-- [ ] tolerate duplicate delivery by immutable event ID
-- [ ] recover undelivered rows after process restart
-- [ ] metrics for queued, delivered, retrying and permanently failed events
-- [ ] deterministic DB/NATS failure tests
+- [x] if any existing event is required for correctness/audit/notification
+      state, implement a transactional outbox or equivalent DB-backed durable
+      queue
+      — migration `010_event_outbox.sql` and `internal/platformdb/outbox.go`.
+      The row is written **inside the transaction that caused it**, which is
+      the property worth having: it exists if and only if the allocation
+      committed. An event cannot be published for a transaction that rolled
+      back, and an allocation cannot commit while its announcement is lost to
+      a broker that happened to be down. Nothing is published from the request
+      path
+- [x] publish outbox rows to JetStream with bounded retry/backoff
+      — exponential and capped, `MaxOutboxAttempts` in total. A row that
+      exhausts its budget is marked failed and **kept**: the point of a
+      durable event is that somebody can still find out it was never delivered
+- [x] mark delivery only after broker acknowledgement
+      — which is why it is JetStream and not core NATS. `nc.Publish` returns
+      when the bytes reach a socket buffer; treating that as delivery would
+      put a durable table in front of a silent loss
+- [x] tolerate duplicate delivery by immutable event ID
+      — the event id is also the `Nats-Msg-Id`, so the broker collapses the
+      one case retrying cannot fix: an acknowledgement lost on the way back,
+      where the event is stored and the outbox believes it is not. Outside the
+      broker's duplicate window, `event_id` is the consumer's own defence
+- [x] recover undelivered rows after process restart
+      — by construction rather than by bookkeeping. Claiming schedules the
+      next attempt **before** handing the row out, so a publisher that dies
+      mid-delivery leaves the row due again after its backoff. There is no
+      crash detection to get wrong
+- [x] metrics for queued, delivered, retrying and permanently failed events
+      — `bsystem_event_outbox_events{state}` and
+      `bsystem_event_outbox_attempts_total{subject,outcome}`, both pinned by
+      the metrics contract test. The outcome worth an alert is
+      `ack_not_recorded`: the broker has the event and the platform could not
+      write that down
+- [x] deterministic DB/NATS failure tests
+      — a broker that refuses on demand, which a real one will not do
+      reliably; plus the E2E scenario that stops the real broker, mints a
+      Global ID, and watches the queue drain when NATS returns
+
+Findings:
+
+- the outbox needed one behaviour change outside itself. NATS connected
+  without `RetryOnFailedConnect`, so a Core that booted a second before the
+  broker held a nil connection for the rest of its life: every event counted
+  "unavailable" and dropped, `/readyz` reporting `nats: degraded` forever, and
+  only a restart fixing it. The outbox would have queued behind a broker this
+  process had decided did not exist
+- verified by mutation, each confirmed to land: announcing on the
+  already-existed path fails the duplicate test; an enqueue on a separate
+  connection survives a rollback and fails the transaction test; marking
+  delivered without an acknowledgement fails the failure test; dropping the
+  immediate follow-up pass leaves a backlog undrained
+- the first CI run failed and the test was the thing that was wrong. The
+  delivery counter is per process and the stack runs two Cores against one
+  database, so a row claimed by the second Core is counted there and nowhere
+  else. A scenario watching only the core it made its request to misses every
+  delivery the other one did. Taking disjoint rows is the property that makes
+  two publishers drain faster instead of delivering twice; the counter is per
+  process and the queue is not. The scenarios sum across both
+- the E2E scenarios assert through `/metrics` rather than by subscribing to
+  the bus. A core NATS subscriber only receives what is published while it is
+  subscribed, so a test that stops the broker, produces an event and
+  subscribes again is racing the publisher's next pass — and a race that
+  usually wins is a test that occasionally fails for a reason nobody can
+  reproduce
 
 Definition of Done:
 - every event category has an explicit delivery guarantee;

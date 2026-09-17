@@ -42,6 +42,14 @@ degraded` and the platform keeps serving. Events are not queued while it is
 absent; they are dropped. That is worth knowing before an acceptance concludes
 that eventing works.
 
+That is true of the best-effort events, which is most of them. The three
+allocation events — `identity.created`, `service_identity.created` and
+`global_id.created` — are different: they are written to a durable outbox in
+the same transaction as the allocation they announce, and delivered when the
+broker returns. An acceptance that stops NATS, allocates a Global ID and then
+restores NATS should see that identifier announced. See
+`bsystem-integration-core/docs/EVENTS.md`.
+
 PostgreSQL is the opposite: while it is unreachable `/readyz` answers `503`
 with `database: error` and nothing else — no host, port, user, database name or
 driver error. Both statements are now executed rather than asserted: the E2E
@@ -84,7 +92,8 @@ restarting it.
 | --- | --- | --- | --- | --- |
 | `HTTP_ADDR` | public config | optional | `:8080` | Listen address. |
 | `DATABASE_URL` | **secret** | **required** | — | Carries the password. Never log it; the mapping audit redacts it from errors. |
-| `NATS_URL` | public config | optional | — | Empty disables eventing. |
+| `NATS_URL` | public config | optional | — | Empty disables delivery. Durable events are still queued in PostgreSQL and delivered whenever a broker is configured and reachable. **JetStream must be enabled on the broker** (`-js`); the bundled Compose stack does this already. |
+| `EVENT_OUTBOX_INTERVAL` | public config | optional | `2s` | How often the durable-event publisher looks for work when it has none. A full batch is followed immediately by another pass, so this does not bound drain speed. |
 | `AUTHENTIK_USERINFO_URL` | public config | **required** | — | Server-to-server UserInfo endpoint. Must be reachable **from the Core container**, which is not the same as from your laptop. |
 | `LOG_LEVEL` | public config | optional | `info` | |
 | `DATABASE_MAX_CONNS` | public config | optional | driver default | Bounded at 500; an out-of-range value falls back rather than failing. |
