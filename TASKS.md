@@ -2234,6 +2234,15 @@ Findings:
   with real images would mean corrupting one. An unchanged pair verifies, a
   rebuilt image is caught **by name**, a vanished one is caught, and a
   manifest recording no image at all is refused rather than trivially verified
+- **the first run of the release pipeline found a real vulnerability**, which
+  is the argument for the pipeline existing. The Security workflow scans one
+  mock image, on the reasoning that the four mocks share a Dockerfile — and
+  nothing had ever scanned the image the platform actually ships. The first
+  scan of it found CVE-2026-14456 in `libssl3` and `libcrypto3`, fixed
+  upstream and still waiting for the `alpine:3.22` tag to move. Both product
+  Dockerfiles now `apk upgrade` rather than only `apk add`: the packages that
+  carry vulnerabilities in an image like this are the base image's own, and
+  `apk add` does not touch them
 - **the HUB image this pipeline builds is not deployable.** The HUB bakes its
   OIDC issuer and client id in at build time, so a release image is specific
   to the authentik it was built for. The pipeline proves the image builds,
@@ -2407,6 +2416,14 @@ Findings:
 - it carries the same no-silent-skip guard as the other two: the job exists to
   run one scenario, so a run that skipped it and exited zero would be the worst
   possible outcome — a green check that restored nothing
+- the first CI run failed on the audit comparison, and the test was what was
+  wrong. Reading a Global ID is itself an audited action, so the read that
+  takes the "before" snapshot writes a row and the read that takes the "after"
+  one writes another: a count comparison was measuring its own observation and
+  was off by exactly one, every time. It compares the entries by id, action,
+  resource and request id now, and asserts that every entry which existed
+  before the backup is still there. New entries after a restore are expected —
+  the platform is still being used
 
 Definition of Done:
 - CI proves a real database backup can be restored into a fresh PostgreSQL and

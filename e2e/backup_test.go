@@ -71,8 +71,18 @@ type platformState struct {
 	IncidentID     string
 	UserGlobalID   string
 	ScopeGrants    string
-	AuditEntries   int
-	Notifications  int
+	// AuditKeys identifies the entries rather than counting them.
+	//
+	// Counting does not work, and finding out why is the point: reading a
+	// Global ID is itself an audited action, so the read that takes the
+	// "before" snapshot writes a row, and the read that takes the "after" one
+	// writes another. A count comparison is then measuring its own
+	// observation and is off by exactly one, every time.
+	//
+	// What has to hold is that nothing was lost. New entries after a restore
+	// are expected — the platform is still being used.
+	AuditKeys     []string
+	Notifications int
 }
 
 func (h *Harness) readPlatformState(t *testing.T, clientID, serverID, incidentID string) platformState {
@@ -111,9 +121,16 @@ func (h *Harness) readPlatformState(t *testing.T, clientID, serverID, incidentID
 	if audit.Status != http.StatusOK {
 		t.Fatalf("read the audit trail: status = %d (body: %s)", audit.Status, truncate(audit.Body))
 	}
-	var entries []map[string]any
+	var entries []struct {
+		ID         int64  `json:"id"`
+		Action     string `json:"action"`
+		ResourceID string `json:"resource_id"`
+		RequestID  string `json:"request_id"`
+	}
 	audit.JSON(t, &entries)
-	state.AuditEntries = len(entries)
+	for _, entry := range entries {
+		state.AuditKeys = append(state.AuditKeys, fmt.Sprintf("%d|%s|%s|%s", entry.ID, entry.Action, entry.ResourceID, entry.RequestID))
+	}
 
 	notifications := h.API(t, http.MethodGet, "/api/v1/notifications?limit=100", TokenAdmin, nil)
 	if notifications.Status != http.StatusOK {
@@ -183,7 +200,7 @@ func TestABackupOfAUsedPlatformRestoresIntoAFreshDatabase(t *testing.T) {
 	})
 
 	before := harness.readPlatformState(t, entity.GlobalID, registered.ID, incident.ID)
-	if before.AuditEntries == 0 || before.Notifications == 0 {
+	if len(before.AuditKeys) == 0 || before.Notifications == 0 {
 		t.Fatalf("the fixture produced no audit entries or no notifications (%+v); the restore would prove nothing about either", before)
 	}
 
@@ -262,8 +279,23 @@ func TestABackupOfAUsedPlatformRestoresIntoAFreshDatabase(t *testing.T) {
 	if after.ScopeGrants != before.ScopeGrants {
 		t.Errorf("the scope grants differ across the restore:\n  before: %s\n  after:  %s", before.ScopeGrants, after.ScopeGrants)
 	}
-	if after.AuditEntries != before.AuditEntries {
-		t.Errorf("the audit trail holds %d entries after the restore, %d before", after.AuditEntries, before.AuditEntries)
+	// Every entry that existed before the backup must still be there, with the
+	// same id, action, resource and request id. Extra entries are expected:
+	// reading a Global ID is itself audited, so taking the snapshot writes
+	// one.
+	survived := map[string]bool{}
+	for _, key := range after.AuditKeys {
+		survived[key] = true
+	}
+	missing := []string{}
+	for _, key := range before.AuditKeys {
+		if !survived[key] {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("%d of %d audit entries did not survive the restore, including %s",
+			len(missing), len(before.AuditKeys), missing[0])
 	}
 	if after.Notifications != before.Notifications {
 		t.Errorf("notifications: %d after the restore, %d before", after.Notifications, before.Notifications)
