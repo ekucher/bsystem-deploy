@@ -227,6 +227,13 @@ services:
       # this service: do not "fix" it by adding them.
       ADAPTER_TIMEOUT: 2s
       ADAPTER_CIRCUIT_OPEN_FOR: 3s
+      # A search allowance small enough for a scenario to reach. It is set on
+      # this core and not on the other one on purpose: every other scenario
+      # talks to the fully configured core, and a burst spent there by the
+      # rate-limit scenario would refuse a later scenario's search for a
+      # reason that has nothing to do with what it is testing.
+      RATE_LIMIT_SEARCH_PER_MINUTE: "60"
+      RATE_LIMIT_SEARCH_BURST: "10"
     depends_on:
       postgres:
         condition: service_healthy

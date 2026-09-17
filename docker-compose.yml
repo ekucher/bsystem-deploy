@@ -111,6 +111,11 @@ services:
       REDMINE_API_KEY: ${REDMINE_API_KEY:-}
       OUTLINE_URL: ${OUTLINE_URL:-}
       OUTLINE_API_KEY: ${OUTLINE_API_KEY:-}
+      # Local token validation. Empty keeps the UserInfo path, which is the
+      # default and the only thing that works with an opaque access token.
+      # Setting the issuer requires authentik to issue JWT access tokens.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
     depends_on:
       postgres:
         condition: service_healthy

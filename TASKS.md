@@ -2026,22 +2026,69 @@ Depends on: P30
 Goal: remove per-request network dependence on authentik UserInfo for token
 validity while preserving authentik as the issuer and source of identity.
 
-- [ ] inspect the exact token/claims contract currently expected from authentik
-- [ ] implement OIDC discovery and JWKS retrieval with bounded timeout
-- [ ] validate signature locally
-- [ ] validate issuer, audience/client, expiry, not-before and algorithm policy
-- [ ] support JWKS cache with bounded TTL and refresh on unknown `kid`
-- [ ] handle signing-key rotation without requiring Core restart
-- [ ] define safe clock-skew tolerance
-- [ ] reject `alg=none`, unexpected algorithms and malformed claims
-- [ ] decide whether groups/claims come from token, UserInfo enrichment or both;
-      preserve the existing authorization boundary
-- [ ] if UserInfo remains for enrichment, make its outage unable to turn an
+- [x] inspect the exact token/claims contract currently expected from authentik
+      — `sub`, `email`, `name`, `preferred_username`, `groups`, read from the
+      UserInfo response. The same five are what the token must carry, so the
+      authorization boundary is unchanged by where they come from
+- [x] implement OIDC discovery and JWKS retrieval with bounded timeout
+      — `internal/oidc`. The discovery document must name the issuer it was
+      fetched from: one that names somebody else is a misconfiguration or a
+      redirect somebody arranged, and following it means taking keys from
+      whoever answered
+- [x] validate signature locally
+- [x] validate issuer, audience/client, expiry, not-before and algorithm policy
+- [x] support JWKS cache with bounded TTL and refresh on unknown `kid`
+- [x] handle signing-key rotation without requiring Core restart
+      — and the old key keeps working while the provider still publishes it,
+      which is what makes a rotation a rotation rather than a cutover
+- [x] define safe clock-skew tolerance
+      — 60s by default, and it is a tolerance rather than an extension: a
+      token ten seconds past expiry is accepted, one five minutes past is not
+- [x] reject `alg=none`, unexpected algorithms and malformed claims
+      — including the one worth naming: a token signed HS256 with the
+      provider's own **published public key**, which verifies against a
+      verifier careless enough to treat the key as a shared secret
+- [x] decide whether groups/claims come from token, UserInfo enrichment or
+      both; preserve the existing authorization boundary
+      — the token, with UserInfo as enrichment only when the token carries no
+      `groups`. Some authentik configurations serve groups from UserInfo only,
+      and that deployment still works
+- [x] if UserInfo remains for enrichment, make its outage unable to turn an
       otherwise invalid token valid or broaden permissions
-- [ ] fake-OIDC tests for valid token, expired token, wrong issuer, wrong
+      — two rules. A failure is not an error: the request proceeds with no
+      groups, which is no role, which is deny-by-default. An unreachable
+      UserInfo can cost a caller their access and can never give them somebody
+      else's. And an answer about a different subject is discarded
+- [x] fake-OIDC tests for valid token, expired token, wrong issuer, wrong
       audience, wrong algorithm, unknown kid, rotated key and discovery/JWKS
       outage
-- [ ] update authentik stage documentation with exact claims required
+      — thirteen refusals in one table, plus the outage from both sides: a
+      provider that goes away cannot revoke a valid token while the keys are
+      held, and cannot make an expired one valid
+- [x] update authentik stage documentation with exact claims required
+      — `bsystem-integration-core/docs/AUTHENTICATION.md`, and the variables
+      in `docs/STAGE-ACCEPTANCE.md` and `.env.example`
+
+Findings:
+
+- **there must be no downgrade between the two modes.** A platform configured
+  to validate locally refuses a token it cannot verify rather than asking
+  UserInfo. The fallback would restore the network dependency the
+  configuration exists to remove, reachable by anybody who sends something
+  that is not a JWT
+- writing the rotation test found the tension the refresh sits in. Refreshing
+  on an unknown `kid` is what makes rotation work; doing it on every unknown
+  `kid` turns a stream of invented ids into a load generator pointed at the
+  platform's own identity provider. The first version of the rate limit also
+  blocked the rotation, because a cache refreshed a moment earlier for
+  ordinary reasons counted against it. A rotation refresh and a cache fetch
+  are different events and are tracked separately now
+- 401 and 503 are different answers. A provider outage answered 401 sends
+  every signed-in person to the login page during an incident that has nothing
+  to do with their session, where they will fail to sign in as well
+- local validation is **not the default**: it requires authentik to issue JWT
+  access tokens. A deployment whose provider issues opaque ones is not broken
+  by this being available, it simply does not set `OIDC_ISSUER_URL`
 
 Definition of Done:
 - request authentication does not require a successful UserInfo network call
@@ -2058,21 +2105,71 @@ Depends on: P31
 Goal: bound expensive or abuse-prone request classes without introducing a
 shared cache until a distributed requirement is demonstrated.
 
-- [ ] inventory public/human, machine/service, AI, search and expensive adapter
+- [x] inventory public/human, machine/service, AI, search and expensive adapter
       routes
-- [ ] implement a small per-instance limiter abstraction with separate policy
+      — taken from the route table, which is already the authoritative
+      inventory, rather than listed a second time beside it. A route added
+      there falls into a class from its authentication kind, so a new endpoint
+      is limited by default rather than unlimited until somebody remembers it;
+      `TestEveryAuthenticatedRouteFallsIntoAClass` enforces that
+- [x] implement a small per-instance limiter abstraction with separate policy
       buckets for human API, service API, AI and search/expensive routes
-- [ ] key human limits by validated principal rather than untrusted headers
-- [ ] key machine limits by service identity
-- [ ] return normalized `429` with bounded `Retry-After`
-- [ ] never include tokens, usernames, email or raw client IP in metric labels
-- [ ] metrics for allowed/rejected requests with bounded route/class labels
-- [ ] tests for burst, refill, cancellation and independent principals
-- [ ] E2E proving one noisy identity does not throttle another
-- [ ] document the limitation of per-instance enforcement
-- [ ] add Redis/distributed coordination only if an explicit multi-replica
+      — `internal/ratelimit`, a token bucket with a bounded key table. The AI
+      class is the tight one: one request there costs a model call and a
+      fan-out of authorized reads rather than a query
+- [x] key human limits by validated principal rather than untrusted headers
+- [x] key machine limits by service identity
+      — both by Global ID, and the middleware runs **after** authentication so
+      the principal exists, **before** authorization because refusing early is
+      the cheaper half of the point
+- [x] return normalized `429` with bounded `Retry-After`
+      — at least one second, because a caller told to wait for nothing retries
+      immediately and is refused again; never longer than a full refill,
+      because a bound longer than that is a caller giving up rather than
+      backing off
+- [x] never include tokens, usernames, email or raw client IP in metric labels
+- [x] metrics for allowed/rejected requests with bounded route/class labels
+      — class and outcome, and deliberately nothing else. A principal is one
+      time series per person or machine identity, and a username or an address
+      would put *who is being throttled* into a store read far more widely
+      than the audit trail. Asserted in both the unit and the E2E scenario
+- [x] tests for burst, refill, cancellation and independent principals
+      — the refill tests drive the clock rather than sleeping: a test that
+      waits is measuring the runner as well as the rate. "Cancellation" is
+      covered as the property that matters here — the limiter never blocks. A
+      limiter that waits for a token has turned a rejection into latency,
+      which is the same exhaustion the limit exists to prevent, held open one
+      goroutine at a time
+- [x] E2E proving one noisy identity does not throttle another
+      — against the **spare** core, with its search allowance turned down in
+      the E2E Compose file. Spending a burst on the core every other scenario
+      talks to would refuse a later scenario's search for a reason that has
+      nothing to do with what it is testing, and the failure would look like a
+      platform defect
+- [x] document the limitation of per-instance enforcement
+      — `bsystem-integration-core/docs/RATE-LIMITS.md`
+- [x] add Redis/distributed coordination only if an explicit multi-replica
       requirement cannot be met safely without it; do not reintroduce unused
       infrastructure speculatively
+      — **not added, deliberately.** A shared counter makes the limit exact
+      and adds a dependency whose outage has to be answered: fail open and the
+      limit is gone at the moment it is most likely to be needed, fail closed
+      and the platform is gone. Nothing here has demonstrated the need for an
+      exact limit, and an approximate one enforced n times for n replicas
+      still bounds abuse by a factor of n. Recorded as an explicit future
+      decision rather than left implicit
+
+Findings:
+
+- the bucket table has to be bounded. A platform whose principals are machine
+  identities minted per job would otherwise grow a bucket per job and release
+  none. The cost of the bound is that a very busy platform may forget a bucket
+  early and that principal starts full — the limit is approximate by design,
+  and this is one of the ways
+- verified by mutation, each confirmed to land: keying every request the same
+  makes the noisy-neighbour test refuse the quiet principal on its first
+  request; putting the operational endpoints in a class fails the
+  classification test on `/health` and `/readyz`
 
 Definition of Done:
 - expensive surfaces have bounded abuse behavior;
