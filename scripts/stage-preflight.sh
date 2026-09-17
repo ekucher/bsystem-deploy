@@ -263,6 +263,15 @@ main() {
     # several, and the preflight cannot tell which this is.
     warn "OIDC_ISSUER_URL is set and OIDC_AUDIENCE is not: a token minted for any client of this issuer will be accepted"
   fi
+  # Bootstrap credentials outlive their purpose silently.
+  #
+  # authentik reads them on every start, not only the first, so a password
+  # left in .env after the account exists is a static administrator credential
+  # in a running container's environment — and nothing else would ever say so.
+  if [ -n "${AUTHENTIK_BOOTSTRAP_PASSWORD:-}" ] || [ -n "${AUTHENTIK_BOOTSTRAP_TOKEN:-}" ]; then
+    warn "AUTHENTIK_BOOTSTRAP_PASSWORD/TOKEN are set: clear them once akadmin exists, or they stay a static administrator credential in the container's environment"
+  fi
+
   # There is deliberately no check that one of the two is set. The base
   # Compose file supplies AUTHENTIK_USERINFO_URL itself, pointing at the
   # authentik in the same stack, so an empty value here does not mean the
