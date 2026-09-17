@@ -2627,3 +2627,33 @@ acceptance against authentik, EspoCRM, Redmine and Outline.
 defect, a failed acceptance check or an owner decision; defect fixes, security
 patches and answers to failed acceptance checks continue as normal. See
 `docs/HANDOFF.md`.
+
+## Owner-requested operational work
+
+### Human account administration
+
+- [x] add normal BSYSTEM-HUB administration for human authentik accounts
+      — owner-requested after the P36 foundation freeze, so this is an explicit
+      owner decision rather than autonomous foundation expansion
+      — Integration Core PR #24 adds the server-side authentik boundary,
+      account list/create/update/password endpoints, persistent Global User ID
+      joining, `identity.user.manage`, an Administrator-only target boundary,
+      service-identity exclusion and the final-active-administrator guard
+      — HUB PR #11 adds create, role, enable/disable and password-reset controls
+      while keeping Global User IDs read-only and hiding mutation actions from
+      callers without `identity.user.manage`
+      — Deploy PR #41 provisions a dedicated non-superuser authentik service
+      account/RBAC role and consumes `BSYSTEM_AUTHENTIK_ADMIN_TOKEN` only in
+      the authentik worker and Integration Core; an empty token leaves the
+      directory read-only
+      — destructive delete remains intentionally absent: the persistent
+      Integration Core identity, immutable `USR-*` identifier and audit/history
+      require an explicit lifecycle policy before deletion is safe
+      — the final-active-administrator lock serializes mutations initiated
+      through Integration Core replicas; direct authentik UI/API changes do not
+      participate in that PostgreSQL advisory lock and can bypass the BSYSTEM
+      guard
+      — PR checks and the post-merge main checks are green for Integration
+      Core, HUB and Deploy, including Security, Autonomous E2E,
+      backup/restore and immutable Release artifacts
+
