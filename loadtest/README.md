@@ -6,6 +6,12 @@ go run . -concurrency 16 -requests 2000
 docker compose -f ../docker-compose.e2e.yml down -v
 ```
 
+The E2E stack already raises the Integration Core's rate limits, because this
+harness drives it as a single identity and the production defaults exist to
+refuse exactly that. Pointing it at any other stack means doing the same, or
+the run measures the limiter rather than the platform — a rise in `429`s is
+the symptom. See `bsystem-integration-core/docs/RATE-LIMITS.md`.
+
 ## What this is, and what it is not
 
 **It is a regression harness.** Run it before a change and after one; a

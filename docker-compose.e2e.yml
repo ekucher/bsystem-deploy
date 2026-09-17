@@ -178,6 +178,25 @@ services:
       # rather than making the suite sleep through the real ones.
       ADAPTER_TIMEOUT: 2s
       ADAPTER_CIRCUIT_OPEN_FOR: 3s
+      # The suite is a load generator, not a session: it makes hundreds of
+      # requests a second as one identity, which is exactly what the
+      # production defaults are there to refuse. So this core's allowances are
+      # raised rather than the defaults being loosened.
+      #
+      # They are raised and not disabled. A disabled limiter would stop
+      # exercising the middleware at all, and the wiring — that the limit runs
+      # after authentication, keyed on the principal, on every authenticated
+      # route — is worth having under every E2E run. The mechanism itself is
+      # proved on the spare core, whose search allowance is turned down to
+      # something a scenario can reach.
+      RATE_LIMIT_HUMAN_PER_MINUTE: "60000"
+      RATE_LIMIT_HUMAN_BURST: "2000"
+      RATE_LIMIT_SERVICE_PER_MINUTE: "60000"
+      RATE_LIMIT_SERVICE_BURST: "2000"
+      RATE_LIMIT_AI_PER_MINUTE: "6000"
+      RATE_LIMIT_AI_BURST: "500"
+      RATE_LIMIT_SEARCH_PER_MINUTE: "6000"
+      RATE_LIMIT_SEARCH_BURST: "500"
     depends_on:
       postgres:
         condition: service_healthy
@@ -227,6 +246,18 @@ services:
       # this service: do not "fix" it by adding them.
       ADAPTER_TIMEOUT: 2s
       ADAPTER_CIRCUIT_OPEN_FOR: 3s
+      # A search allowance small enough for a scenario to reach. It is set on
+      # this core and not on the other one on purpose: every other scenario
+      # talks to the fully configured core, and a burst spent there by the
+      # rate-limit scenario would refuse a later scenario's search for a
+      # reason that has nothing to do with what it is testing.
+      RATE_LIMIT_SEARCH_PER_MINUTE: "60"
+      RATE_LIMIT_SEARCH_BURST: "10"
+      # Everything else raised for the same reason as on the other core.
+      RATE_LIMIT_HUMAN_PER_MINUTE: "60000"
+      RATE_LIMIT_HUMAN_BURST: "2000"
+      RATE_LIMIT_SERVICE_PER_MINUTE: "60000"
+      RATE_LIMIT_SERVICE_BURST: "2000"
     depends_on:
       postgres:
         condition: service_healthy

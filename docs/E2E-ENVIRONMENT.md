@@ -88,6 +88,17 @@ that production-length windows would make them sleep through:
 quickly, and `ADAPTER_CIRCUIT_OPEN_FOR` to 3s, so an upstream can be seen
 being shed and then recovering.
 
+It also raises the rate limits on the fully configured core. The suite is a
+load generator rather than a session — hundreds of requests a second as one
+identity — which is exactly what the production defaults exist to refuse. They
+are raised and not disabled, so every run still exercises the middleware and
+its wiring; the mechanism itself is proved on the spare core, whose search
+allowance is turned *down* to something a scenario can reach.
+
+A load run has the same problem for the same reason: `loadtest/` drives the
+platform as one identity, so raise the allowances on whatever stack it is
+pointed at or the run measures the limiter.
+
 Note that a scenario asserting an upstream *failure* must inject a fault that
 outlasts the retry budget. A single injected fault is retried away — which is
 the adapter behaving correctly, but says nothing about how a real outage
@@ -138,6 +149,7 @@ expected to actually run.
 | Circuit breaker | a sustained outage is shed, reported in `/readyz` and `/metrics` without making the platform unready, leaves other adapters serving, and closes again on recovery |
 | Secret safety | no rejection or upstream error discloses a credential, an internal hostname or a stack trace |
 | Events | a service-published envelope reaches `bsystem.events.<event>` with its `SVC-*` actor and request ID; publishing is refused to humans and validated |
+| Rate limits | one identity spending its search allowance is refused with a bounded `Retry-After` and the platform's normalized error, while another identity is untouched; the metric counts the refusals and names no principal |
 | Durable events | a Global ID minted while the broker is stopped is queued rather than dropped, and delivered with a broker acknowledgement once NATS returns; one source record is announced once however often it is requested |
 | Dependency outages | NATS is stopped and the platform keeps serving and reconnects on its own; PostgreSQL is stopped and the platform becomes unready without describing its database, then recovers without a restart; a core started with no database never serves and comes up once the database returns |
 

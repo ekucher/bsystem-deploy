@@ -106,6 +106,36 @@ restarting it.
 | `ADAPTER_TIMEOUT` | public config | optional | `10s` | Per upstream attempt. |
 | `ADAPTER_CIRCUIT_OPEN_FOR` | public config | optional | `30s` | |
 
+### Token validation
+
+Optional, and worth doing. Without these the Core calls authentik's UserInfo
+endpoint **once per request**, which makes the identity provider a synchronous
+dependency of every read. With them the signature is checked locally and
+authentik is consulted once for its keys. It requires the provider to issue
+**JWT** access tokens carrying `groups`; see
+`bsystem-integration-core/docs/AUTHENTICATION.md` for the exact claims.
+
+| Variable | Class | Required | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `OIDC_ISSUER_URL` | public config | optional | — | Enables local validation. The exact `iss` a token must carry. |
+| `OIDC_AUDIENCE` | public config | optional | — | Empty accepts a token minted for **any** client of this issuer, and is logged as a warning at startup. |
+| `OIDC_CLOCK_SKEW` | public config | optional | `60s` | Tolerance for clock drift. |
+| `OIDC_JWKS_TTL` | public config | optional | `15m` | Key-set cache lifetime. Rotation is picked up sooner: an unknown key id triggers one refresh. |
+| `OIDC_HTTP_TIMEOUT` | public config | optional | `5s` | |
+
+### Rate limits
+
+Per principal and per Core instance. A deployment running several instances
+enforces each limit once per instance rather than once in total — see
+`bsystem-integration-core/docs/RATE-LIMITS.md`. A zero disables a class.
+
+| Variable | Class | Required | Default | Notes |
+| --- | --- | --- | --- | --- |
+| `RATE_LIMIT_HUMAN_PER_MINUTE` / `RATE_LIMIT_HUMAN_BURST` | public config | optional | `300` / `60` | The API a browser calls. |
+| `RATE_LIMIT_SERVICE_PER_MINUTE` / `RATE_LIMIT_SERVICE_BURST` | public config | optional | `1200` / `200` | The machine API. |
+| `RATE_LIMIT_AI_PER_MINUTE` / `RATE_LIMIT_AI_BURST` | public config | optional | `20` / `5` | One request costs a model call and a fan-out of reads. |
+| `RATE_LIMIT_SEARCH_PER_MINUTE` / `RATE_LIMIT_SEARCH_BURST` | public config | optional | `120` / `30` | |
+
 ### Source systems
 
 | Variable | Class | Required | Notes |
