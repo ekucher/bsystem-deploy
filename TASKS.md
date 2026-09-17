@@ -92,8 +92,8 @@ it.
 | --- | --- | --- | --- |
 | `bsystem-integration-core` | #6 | `066613a` | an unconfigured integration answered "does not support this capability"; the status is now checked before the capability |
 | `bsystem-hub` | #4 | `420d8a8` | the HUB rendered that same 503 as a bare "Помилка"; three 503s are now told apart, because the reader's next step differs for each |
-| `bsystem-hub` | #5 | `e7ed340` | the authorization code stayed in the URL when the exchange failed; the strip moved into a `finally` |
-| `bsystem-design-system` | #4 | `03fb5d7` | two dark-theme button labels measured below WCAG AA; the fill became its own token, and contrast is now measured from `tokens.css` directly |
+| `bsystem-hub` | #5 | `e7ed340` | the authorization code stayed in the URL on a failed exchange; the strip moved into a `finally` |
+| `bsystem-design-system` | #4 | `03fb5d7` | two dark-theme button labels below WCAG AA; the fill became its own token, and contrast is now measured from `tokens.css` directly |
 | `bsystem-hub` | #2, #1 | `a5cd6aa`, `0bbc881` | `actions/checkout` and `actions/setup-node` 4 → 7 |
 | `bsystem-integration-core` | #7 | `6d37af3` | `bsystem_database_pool_acquires_total` was published as a gauge; the registry gained `CounterFunc`, and `/metrics` now has a contract test |
 | `bsystem-deploy` | #8 | `2fea7b8` | how to read an empty Grafana panel, which is the dashboard's most misleading output |
@@ -1787,3 +1787,307 @@ A task may be marked `[x]` only when:
 If one task is blocked by production access, credentials or an owner-only
 business decision, mark only that task `[!]` and continue with the next
 independent task.
+
+# P28 — Failure-injection E2E orchestration
+
+Priority: CRITICAL
+Depends on: P23
+
+Goal: close the two remaining E2E resilience gaps by controlling dependency
+lifecycle from CI rather than only observing a fully running stack.
+
+- [ ] add a CI/harness control surface that can stop/start only designated E2E
+      dependency containers without giving the application containers Docker
+      socket access
+- [ ] stop NATS while Integration Core remains running
+- [ ] verify `/readyz` reports NATS degraded exactly as designed and the Core
+      remains ready if that is the documented policy
+- [ ] restore NATS and verify automatic recovery without Core restart
+- [ ] stop PostgreSQL while Integration Core remains running
+- [ ] verify `/readyz` becomes non-ready and does not leak DSN, host, user or
+      driver details
+- [ ] restore PostgreSQL and verify readiness recovers without Core restart
+- [ ] exercise startup with PostgreSQL initially unavailable, where practical,
+      and document whether retry/restart policy or fail-fast startup is the
+      intended contract
+- [ ] make lifecycle tests deterministic, bounded and impossible to silently
+      skip in `E2E_REQUIRED=1` CI
+
+Definition of Done:
+- P23's NATS and PostgreSQL outage boxes can be closed with executable evidence;
+- no production credentials or privileged application container is introduced;
+- expected degraded/unready semantics are pinned by tests;
+- Autonomous E2E and Security are green.
+
+# P29 — Event delivery reliability contract
+
+Priority: CRITICAL
+Depends on: P28
+
+Goal: make event delivery guarantees explicit and executable rather than
+implicit in a successful NATS publish call.
+
+## P29.1 Semantics decision from existing architecture
+
+- [ ] inventory every event publisher and consumer contract
+- [ ] document current delivery semantics: loss window, duplication window,
+      ordering scope and behavior while NATS is unavailable
+- [ ] decide, based on current product invariants, which events may be best-effort
+      and which require durable delivery; do not invent a business promise
+- [ ] give every durable event an immutable event ID and stable occurred-at time
+- [ ] document idempotency expectations for consumers
+
+## P29.2 Durable path where required
+
+- [ ] if any existing event is required for correctness/audit/notification state,
+      implement a transactional outbox or equivalent DB-backed durable queue
+- [ ] publish outbox rows to JetStream with bounded retry/backoff
+- [ ] mark delivery only after broker acknowledgement
+- [ ] tolerate duplicate delivery by immutable event ID
+- [ ] recover undelivered rows after process restart
+- [ ] metrics for queued, delivered, retrying and permanently failed events
+- [ ] deterministic DB/NATS failure tests
+
+Definition of Done:
+- every event category has an explicit delivery guarantee;
+- durable events survive broker outage and process restart without silent loss;
+- duplicates are safe by contract;
+- no event payload gains credential/secret data;
+- docs and metrics describe the implemented guarantee, not an aspiration.
+
+# P30 — Audit durability policy
+
+Priority: CRITICAL
+Depends on: P29
+
+Goal: define which successful operations are allowed to exist without a durable
+audit record, then enforce that policy consistently.
+
+- [ ] inventory all audit-producing read and mutation paths
+- [ ] classify audit events into security-critical mutation, business mutation,
+      sensitive read and informational/operational categories
+- [ ] define fail-closed vs fail-open behavior for each category from existing
+      security invariants; owner/business decisions remain BLOCKED rather than
+      guessed
+- [ ] make security-critical mutations and their audit record atomic where
+      technically possible
+- [ ] where atomicity is impossible, make audit failure visible through a
+      durable/observable failure state rather than log-only behavior
+- [ ] add metrics and alerts for audit persistence failures
+- [ ] prove a mutation cannot return success when its policy requires a durable
+      audit and the audit write fails
+- [ ] prove low-risk paths do not become globally unavailable from a noncritical
+      audit sink failure when policy says fail-open
+
+Definition of Done:
+- audit durability behavior is explicit per operation class;
+- tests fail when a required audit record is dropped;
+- no raw DB/audit error leaks to clients;
+- documentation, metrics and behavior agree.
+
+# P31 — Local JWT/JWKS authentication hardening
+
+Priority: HIGH
+Depends on: P30
+
+Goal: remove per-request network dependence on authentik UserInfo for token
+validity while preserving authentik as the issuer and source of identity.
+
+- [ ] inspect the exact token/claims contract currently expected from authentik
+- [ ] implement OIDC discovery and JWKS retrieval with bounded timeout
+- [ ] validate signature locally
+- [ ] validate issuer, audience/client, expiry, not-before and algorithm policy
+- [ ] support JWKS cache with bounded TTL and refresh on unknown `kid`
+- [ ] handle signing-key rotation without requiring Core restart
+- [ ] define safe clock-skew tolerance
+- [ ] reject `alg=none`, unexpected algorithms and malformed claims
+- [ ] decide whether groups/claims come from token, UserInfo enrichment or both;
+      preserve the existing authorization boundary
+- [ ] if UserInfo remains for enrichment, make its outage unable to turn an
+      otherwise invalid token valid or broaden permissions
+- [ ] fake-OIDC tests for valid token, expired token, wrong issuer, wrong
+      audience, wrong algorithm, unknown kid, rotated key and discovery/JWKS
+      outage
+- [ ] update authentik stage documentation with exact claims required
+
+Definition of Done:
+- request authentication does not require a successful UserInfo network call
+      when the token itself carries all required validated claims;
+- key rotation works in tests;
+- authorization behavior is unchanged or more restrictive;
+- no token or signing material is logged.
+
+# P32 — Rate limiting and abuse controls
+
+Priority: HIGH
+Depends on: P31
+
+Goal: bound expensive or abuse-prone request classes without introducing a
+shared cache until a distributed requirement is demonstrated.
+
+- [ ] inventory public/human, machine/service, AI, search and expensive adapter
+      routes
+- [ ] implement a small per-instance limiter abstraction with separate policy
+      buckets for human API, service API, AI and search/expensive routes
+- [ ] key human limits by validated principal rather than untrusted headers
+- [ ] key machine limits by service identity
+- [ ] return normalized `429` with bounded `Retry-After`
+- [ ] never include tokens, usernames, email or raw client IP in metric labels
+- [ ] metrics for allowed/rejected requests with bounded route/class labels
+- [ ] tests for burst, refill, cancellation and independent principals
+- [ ] E2E proving one noisy identity does not throttle another
+- [ ] document the limitation of per-instance enforcement
+- [ ] add Redis/distributed coordination only if an explicit multi-replica
+      requirement cannot be met safely without it; do not reintroduce unused
+      infrastructure speculatively
+
+Definition of Done:
+- expensive surfaces have bounded abuse behavior;
+- 429 behavior is in OpenAPI and HUB error handling where applicable;
+- no high-cardinality/sensitive labels are added;
+- distributed rate limiting remains an explicit future decision unless proven
+      necessary.
+
+# P33 — Immutable release artifact pipeline
+
+Priority: CRITICAL
+Depends on: P28-P32
+
+Goal: ensure the artifact scanned, described and promoted is the exact artifact
+that CI tested, not a later rebuild from the same source.
+
+- [ ] define releasable artifacts for Integration Core and HUB; keep mocks/test
+      images separate from product artifacts
+- [ ] build each release image once per commit
+- [ ] tag by immutable commit SHA and record image digest
+- [ ] use the exact built image for runtime/E2E validation where practical
+- [ ] scan that exact image with Trivy rather than a rebuild
+- [ ] generate SBOM from that exact image and bind it to its digest
+- [ ] generate provenance/attestation with repository, commit, workflow run and
+      digest; do not add signing credentials unless owner-configured
+- [ ] publish release manifest as CI artifact containing image digests, schema
+      level, OpenAPI hash, HUB/Core commits and compatibility manifest
+- [ ] verify a digest mismatch between tested/scanned/reported artifacts fails CI
+- [ ] document promotion flow without performing a production deployment
+
+Definition of Done:
+- one immutable digest identifies what was tested, scanned and described;
+- SBOM/provenance refer to that digest;
+- a rebuild cannot silently substitute for the tested image;
+- no registry write credential is required unless publishing is explicitly
+      owner-enabled.
+
+# P34 — Versioning and compatibility policy
+
+Priority: HIGH
+Depends on: P33
+
+Goal: turn existing cross-repo compatibility checks into an explicit release
+contract.
+
+- [ ] define versioning policy for Integration Core HTTP API
+- [ ] define what constitutes additive vs breaking API change
+- [ ] define OpenAPI version/source-of-truth policy
+- [ ] define schema compatibility level and minimum/maximum supported migration
+      direction for a release
+- [ ] define HUB ↔ Core compatibility declaration without inventing a consumer
+      version matrix that is not tested
+- [ ] expose build/release version metadata consistently through metrics and/or
+      a safe version endpoint
+- [ ] make release manifest record compatibility requirements
+- [ ] add CI fixtures proving an additive API change passes and an intentionally
+      breaking provider change fails the consumer gate
+- [ ] document emergency rollback constraints when a release includes an
+      irreversible schema change; do not add an irreversible migration here
+
+Definition of Done:
+- a release states which Core/HUB/schema/OpenAPI combination it represents;
+- breaking-change rules are machine-tested where practical;
+- compatibility language matches what CI actually verifies.
+
+# P35 — Automated backup/restore verification
+
+Priority: CRITICAL
+Depends on: P33, P34
+
+Goal: prove restoreability in an ephemeral environment rather than only maintain
+a runbook.
+
+- [ ] create deterministic fixture data covering identities, service identities,
+      Global IDs/mappings, RBAC/scopes, audit, notifications, operations and
+      support records
+- [ ] take a PostgreSQL logical backup in CI/E2E using test-only credentials
+- [ ] destroy/recreate the ephemeral database
+- [ ] restore the backup
+- [ ] start the application against the restored database
+- [ ] verify schema migration history/checksums remain valid
+- [ ] verify representative Global IDs are unchanged
+- [ ] verify RBAC/scopes, notifications, support and audit data survive
+- [ ] verify secrets are not written into backup artifacts by the application
+      layer; do not publish DB backup artifacts outside the CI job
+- [ ] exercise restore followed by upgrade to current schema when practical
+- [ ] document what this proves and what still requires real infrastructure
+      backup acceptance
+
+Definition of Done:
+- CI proves a real database backup can be restored into a fresh PostgreSQL and
+      accepted by the current Core;
+- identity/authorization identifiers remain stable;
+- test backup is ephemeral and not retained as a downloadable artifact;
+- production backup target/retention remains owner-controlled.
+
+# P36 — Release candidate freeze and stage handoff
+
+Priority: CRITICAL
+Depends on: P28-P35
+
+Goal: stop expanding the platform foundation and produce one reproducible
+release-candidate set for real stage acceptance.
+
+- [ ] perform a final independent invariant/security review of changes from
+      P28-P35
+- [ ] ensure all non-owner-dependent P28-P35 work is DONE or explicitly
+      BLOCKED for a real reason
+- [ ] ensure Integration Core, HUB, Design System and Deploy `main` CI/Security
+      are green
+- [ ] run main-to-main compatibility and Autonomous E2E against the exact RC
+      commits
+- [ ] generate final compatibility manifest
+- [ ] generate final immutable artifact/release manifest with image digests,
+      commits, schema level and OpenAPI hash
+- [ ] update `docs/HANDOFF.md` with exact RC commits/digests and owner actions
+- [ ] verify stage preflight/smoke scripts against the current RC configuration
+- [ ] explicitly freeze further autonomous foundation feature work after P36;
+      new foundation changes require a defect, failed acceptance check or owner
+      decision
+- [ ] leave real authentik/EspoCRM/Redmine/Outline credentials, customer mapping,
+      SLA policy, DNS/TLS and production deployment BLOCKED
+
+Definition of Done:
+- one exact RC set is reproducible from GitHub and CI artifacts;
+- all autonomous checks are green for that set;
+- owner receives an ordered real-stage acceptance handoff;
+- no production/stage deployment is performed autonomously.
+
+## P28-P36 execution rule
+
+This is the final autonomous foundation/release-readiness wave before real stage
+acceptance. Do not add unrelated business modules or speculative infrastructure.
+
+A task may be marked `[x]` only when:
+
+```text
+1. implementation and tests are committed/merged in GitHub;
+2. relevant CI, Security and cross-repository checks are green;
+3. the protected property is demonstrated non-vacuously where practical;
+4. OpenAPI/docs/migrations/metrics are synchronized when affected;
+5. TASKS.md records findings, limitations and new owner-only BLOCKED items.
+```
+
+If a task requires production/stage credentials, a commercial/SLA decision,
+customer ownership mapping, registry credentials, DNS/TLS changes or another
+owner-only decision, mark that part `[!]` and continue with every independent
+safe item.
+
+After P36, stop autonomous foundation expansion. The next phase is real stage
+acceptance against authentik, EspoCRM, Redmine and Outline.
