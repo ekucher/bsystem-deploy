@@ -69,6 +69,14 @@ def render(paths):
 # in a diff somebody reads.
 WRITABLE_BINDS: dict[str, str] = {}
 
+# User-administration credentials are deliberately server-side. Pin their
+# placement so a future Compose edit cannot hand either value to the HUB/browser
+# container or to an unrelated service.
+ADMIN_SECRET_ENV = {
+    "BSYSTEM_AUTHENTIK_ADMIN_TOKEN": {"authentik-worker"},
+    "AUTHENTIK_ADMIN_TOKEN": {"integration-core", "integration-core-no-outline"},
+}
+
 
 def inspect(label, rendered, failures, seen=None):
     """Check one rendered stack. Returns the number of services it checked."""
@@ -101,6 +109,19 @@ def inspect(label, rendered, failures, seen=None):
 
         if service.get("privileged"):
             failures.append("%s runs privileged" % where)
+
+        environment = service.get("environment") or {}
+        if isinstance(environment, list):
+            environment = {
+                str(item).split("=", 1)[0]: item
+                for item in environment
+            }
+        for variable, allowed_services in ADMIN_SECRET_ENV.items():
+            if variable in environment and name not in allowed_services:
+                failures.append(
+                    "%s receives %s, which is restricted to %s"
+                    % (where, variable, ", ".join(sorted(allowed_services)))
+                )
 
         if name in READ_ONLY and not service.get("read_only"):
             failures.append(

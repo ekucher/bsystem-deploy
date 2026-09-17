@@ -120,6 +120,19 @@ at `http://127.0.0.1:9000/` instead.
 
 `AUTHENTIK_BOOTSTRAP_EMAIL`, `AUTHENTIK_BOOTSTRAP_PASSWORD` and
 `AUTHENTIK_BOOTSTRAP_TOKEN` create `akadmin` on the first start, so the setup
+
+### BSYSTEM-HUB user administration credential
+
+`BSYSTEM_AUTHENTIK_ADMIN_TOKEN` is separate from the bootstrap token. Set it
+only when the HUB must create or modify human accounts. Generate at least
+32 random bytes locally (for example `openssl rand -hex 32`) and keep it in
+the host's untracked `.env`.
+
+The authentik worker reconciles this value into a dedicated least-privilege
+service-account token; Integration Core receives the same value for server-side
+API calls. The authentik server container, HUB container and browser bundle do
+not receive it. Leaving the value empty keeps account mutations disabled.
+
 page is never served at all and the token is an API token to configure the rest
 with. All three are empty by default and change nothing when unset.
 

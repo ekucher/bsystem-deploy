@@ -9,6 +9,27 @@ Operational CLI:
 ./scripts/bsystem-userctl
 ```
 
+The normal administration surface is the **Користувачі** page in BSYSTEM-HUB.
+The CLI remains the local operator / break-glass path.
+
+The HUB never receives an authentik API credential. Browser requests go to
+Integration Core, which enforces BSYSTEM RBAC and uses a dedicated
+least-privilege authentik service account server-side.
+
+## HUB permissions
+
+- `identity.user.read` — read the human account directory. Granted to
+  Administrator, Manager and Support.
+- `identity.user.manage` — create users, change non-administrator human roles,
+  enable/disable accounts and reset local passwords. Granted to Administrator
+  and Manager.
+- `identity.user.admin` — administrator-class targets and assignments. It is
+  not granted to Manager; Administrator receives it through the platform `*`
+  wildcard.
+
+`BSYSTEM-Services` identities are excluded from this surface even if they are
+misconfigured with a human group.
+
 ## Human roles
 
 | CLI role | authentik group |
@@ -39,6 +60,36 @@ Operational CLI:
 There is intentionally no `delete` command yet. User deletion requires a
 separate lifecycle decision for the persistent Integration Core identity,
 Global User ID, and audit/history references.
+
+The HUB follows the same rule: there is no destructive delete action. A user
+can be disabled while the persistent `USR-*` identity and audit/history remain
+intact.
+
+## Enabling HUB mutations
+
+Human-account mutation is disabled when `BSYSTEM_AUTHENTIK_ADMIN_TOKEN` is
+empty. The directory remains readable from Integration Core's persistent
+identity store.
+
+Generate the token on the deployment host and keep it only in the local
+`.env`:
+
+```bash
+openssl rand -hex 32
+```
+
+Store that output as `BSYSTEM_AUTHENTIK_ADMIN_TOKEN`. Do not commit it.
+
+The authentik blueprint provisions a dedicated service account and RBAC role
+with only:
+
+- `authentik_core.view_user`
+- `authentik_core.add_user`
+- `authentik_core.change_user`
+- `authentik_core.reset_user_password`
+- `authentik_core.view_group`
+
+It is not an authentik superuser and does not use the bootstrap/akadmin token.
 
 ## Password handling
 
@@ -75,6 +126,12 @@ guard path: `SELECT ... FOR UPDATE` cannot be combined with the `DISTINCT`
 query produced by the original many-to-many lookup. The final implementation
 locks the administrator group first and queries users through that exact group
 relation without `DISTINCT`.
+
+The HUB/Integration Core mutation path applies the same final-active-admin
+invariant and serializes **Core-originated** account mutations with a PostgreSQL
+advisory lock shared by all Integration Core replicas. This is not a global
+authentik lock: an administrator changing memberships directly in authentik's
+own UI/API does not participate in that lock and can bypass this BSYSTEM guard.
 
 ## Global User IDs
 
