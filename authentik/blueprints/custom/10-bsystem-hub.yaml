@@ -92,3 +92,408 @@ entries:
 
       meta_hide: false
       open_in_new_tab: false
+
+
+  # ============================================================
+  # BSYSTEM-HUB Application Entitlements
+  # ============================================================
+
+  - id: entitlement-hub-access
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-hub-application
+      name: hub.access
+    attrs:
+      attributes: {}
+
+  - id: entitlement-hub-admin
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-hub-application
+      name: hub.admin
+    attrs:
+      attributes: {}
+
+  - id: entitlement-hub-users-read
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-hub-application
+      name: hub.users.read
+    attrs:
+      attributes: {}
+
+  - id: entitlement-hub-users-manage
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-hub-application
+      name: hub.users.manage
+    attrs:
+      attributes: {}
+
+  - id: entitlement-hub-integrations-read
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-hub-application
+      name: hub.integrations.read
+    attrs:
+      attributes: {}
+
+  - id: entitlement-hub-integrations-manage
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-hub-application
+      name: hub.integrations.manage
+    attrs:
+      attributes: {}
+
+  - id: entitlement-hub-audit-read
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-hub-application
+      name: hub.audit.read
+    attrs:
+      attributes: {}
+
+
+  # ============================================================
+  # BSYSTEM-HUB Application Access Bindings
+  # ============================================================
+
+  - id: app-binding-admins
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-hub-application
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - id: app-binding-managers
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-hub-application
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+  - id: app-binding-developers
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-hub-application
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Developers]]
+      enabled: true
+      negate: false
+
+  - id: app-binding-qa
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-hub-application
+      order: 30
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-QA]]
+      enabled: true
+      negate: false
+
+  - id: app-binding-support
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-hub-application
+      order: 40
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Support]]
+      enabled: true
+      negate: false
+
+  - id: app-binding-devops
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-hub-application
+      order: 50
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-DevOps]]
+      enabled: true
+      negate: false
+
+  - id: app-binding-customers
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-hub-application
+      order: 60
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Customers]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: hub.access
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-access
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-access
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-access
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Developers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-access
+      order: 30
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-QA]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-access
+      order: 40
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Support]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-access
+      order: 50
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-DevOps]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-access
+      order: 60
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Customers]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: hub.admin
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-admin
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: hub.users.read
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-users-read
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-users-read
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-users-read
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Support]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: hub.users.manage
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-users-manage
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-users-manage
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: hub.integrations.read
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-read
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-read
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-read
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Developers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-read
+      order: 30
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-QA]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-read
+      order: 40
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Support]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-read
+      order: 50
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-DevOps]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: hub.integrations.manage
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-manage
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-manage
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Developers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-integrations-manage
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-DevOps]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: hub.audit.read
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-audit-read
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-audit-read
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-audit-read
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Support]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-hub-audit-read
+      order: 30
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-DevOps]]
+      enabled: true
+      negate: false
