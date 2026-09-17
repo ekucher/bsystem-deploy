@@ -1,0 +1,731 @@
+#!/usr/bin/env bash
+#
+# BSYSTEM human-user administration CLI.
+#
+# Passwords are accepted only through an interactive hidden prompt and are
+# passed to authentik over stdin. They are never accepted as command-line
+# arguments.
+#
+set -uo pipefail
+
+PROJECT="${BSYSTEM_COMPOSE_PROJECT:-bsystem-platform}"
+DB_USER="${BSYSTEM_DB_USER:-bsystem}"
+DB_NAME="${BSYSTEM_DB_NAME:-bsystem_integration}"
+
+AK_CONTAINER=""
+PG_CONTAINER=""
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  bsystem-userctl list
+  bsystem-userctl show USERNAME
+  bsystem-userctl create
+  bsystem-userctl passwd USERNAME
+  bsystem-userctl set-role USERNAME ROLE
+  bsystem-userctl enable USERNAME
+  bsystem-userctl disable USERNAME
+  bsystem-userctl help
+
+Human roles:
+  admin
+  manager
+  developer
+  qa
+  support
+  devops
+  customer
+
+Examples:
+  bsystem-userctl list
+  bsystem-userctl show e.kucher
+  bsystem-userctl create
+  bsystem-userctl set-role ivan.petrenko manager
+  bsystem-userctl passwd client.demo
+  bsystem-userctl disable client.demo
+
+Environment overrides:
+  BSYSTEM_COMPOSE_PROJECT   default: bsystem-platform
+  BSYSTEM_DB_USER           default: bsystem
+  BSYSTEM_DB_NAME           default: bsystem_integration
+USAGE
+}
+
+die() {
+    printf 'ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+validate_username() {
+    local username="$1"
+
+    if [[ -z "$username" ]]; then
+        return 1
+    fi
+
+    [[ "$username" =~ ^[A-Za-z0-9._@-]+$ ]]
+}
+
+normalize_role() {
+    local role="${1,,}"
+
+    case "$role" in
+        admin|admins|administrator|bsystem-admins)
+            printf '%s\n' "BSYSTEM-Admins"
+            ;;
+        manager|managers|bsystem-managers)
+            printf '%s\n' "BSYSTEM-Managers"
+            ;;
+        developer|developers|dev|bsystem-developers)
+            printf '%s\n' "BSYSTEM-Developers"
+            ;;
+        qa|bsystem-qa)
+            printf '%s\n' "BSYSTEM-QA"
+            ;;
+        support|bsystem-support)
+            printf '%s\n' "BSYSTEM-Support"
+            ;;
+        devops|bsystem-devops)
+            printf '%s\n' "BSYSTEM-DevOps"
+            ;;
+        customer|customers|client|bsystem-customers)
+            printf '%s\n' "BSYSTEM-Customers"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+find_container() {
+    local service="$1"
+    local -a ids=()
+
+    mapfile -t ids < <(
+        docker ps \
+            --filter "label=com.docker.compose.project=$PROJECT" \
+            --filter "label=com.docker.compose.service=$service" \
+            --format '{{.ID}}'
+    )
+
+    if [ "${#ids[@]}" -ne 1 ]; then
+        printf \
+            'ERROR: expected exactly one running %s container for project %s; found %s\n' \
+            "$service" "$PROJECT" "${#ids[@]}" >&2
+        return 1
+    fi
+
+    printf '%s\n' "${ids[0]}"
+}
+
+discover_containers() {
+    command -v docker >/dev/null 2>&1 ||
+        die "docker is not available"
+
+    docker info >/dev/null 2>&1 ||
+        die "cannot talk to Docker daemon"
+
+    AK_CONTAINER="$(find_container authentik-worker)" || exit 1
+    PG_CONTAINER="$(find_container postgres)" || exit 1
+}
+
+cmd_list() {
+    local auth_out
+    local pg_out
+    local username
+    local gid
+    local marker
+    local display
+    local active
+    local groups
+
+    declare -A global_ids=()
+
+    pg_out="$(
+        docker exec "$PG_CONTAINER" \
+            psql \
+                -X \
+                -qAt \
+                -F $'\t' \
+                -U "$DB_USER" \
+                -d "$DB_NAME" \
+                -c "
+SELECT username, global_user_id
+FROM identities
+ORDER BY username;
+"
+    )" || die "failed to read Integration Core identities"
+
+    while IFS=$'\t' read -r username gid; do
+        [ -n "$username" ] || continue
+        global_ids["$username"]="$gid"
+    done <<< "$pg_out"
+
+    auth_out="$(
+        docker exec "$AK_CONTAINER" \
+            ak shell -c '
+from authentik.core.models import User
+
+qs = (
+    User.objects
+    .filter(groups__name__startswith="BSYSTEM-")
+    .distinct()
+    .order_by("username")
+)
+
+for u in qs:
+    groups = list(
+        u.groups
+        .filter(name__startswith="BSYSTEM-")
+        .order_by("name")
+        .values_list("name", flat=True)
+    )
+
+    display = (u.name or "").replace("\t", " ").replace("\n", " ")
+
+    print(
+        "__BSYSTEM_USER__\t{}\t{}\t{}\t{}".format(
+            u.username,
+            display,
+            "yes" if u.is_active else "no",
+            ",".join(groups),
+        )
+    )
+'
+    )" || die "failed to read authentik users"
+
+    printf '%-24s %-12s %-8s %-28s %s\n' \
+        "USERNAME" "GLOBAL-ID" "ACTIVE" "GROUP" "NAME"
+
+    printf '%-24s %-12s %-8s %-28s %s\n' \
+        "--------" "---------" "------" "-----" "----"
+
+    while IFS=$'\t' read -r marker username display active groups; do
+        [ "$marker" = "__BSYSTEM_USER__" ] || continue
+
+        printf '%-24s %-12s %-8s %-28s %s\n' \
+            "$username" \
+            "${global_ids[$username]:--}" \
+            "$active" \
+            "$groups" \
+            "$display"
+    done < <(
+        printf '%s\n' "$auth_out" |
+            grep '^__BSYSTEM_USER__' || true
+    )
+}
+
+cmd_show() {
+    local username="$1"
+
+    validate_username "$username" || die "invalid username"
+
+    echo "===== AUTHENTIK ====="
+
+    docker exec \
+        -e BSYSTEM_USERNAME="$username" \
+        "$AK_CONTAINER" \
+        ak shell -c '
+import os
+from authentik.core.models import User
+
+username = os.environ["BSYSTEM_USERNAME"]
+
+qs = User.objects.filter(username=username)
+
+if qs.count() != 1:
+    raise RuntimeError(
+        f"Expected exactly one user {username!r}, found {qs.count()}"
+    )
+
+u = qs.get()
+
+print()
+print("Username :", u.username)
+print("Name     :", u.name)
+print("Email    :", u.email)
+print("Type     :", u.type)
+print("Active   :", u.is_active)
+print(
+    "Groups   :",
+    list(
+        u.groups
+        .filter(name__startswith="BSYSTEM-")
+        .order_by("name")
+        .values_list("name", flat=True)
+    )
+)
+' || return 1
+
+    echo
+    echo "===== INTEGRATION CORE ====="
+
+    docker exec "$PG_CONTAINER" \
+        psql \
+            -X \
+            -U "$DB_USER" \
+            -d "$DB_NAME" \
+            -P pager=off \
+            -v username="$username" \
+            -c "
+SELECT
+    username,
+    global_user_id,
+    groups_json,
+    first_seen_at,
+    last_seen_at
+FROM identities
+WHERE username = :'username';
+"
+}
+
+cmd_create() {
+    local username
+    local display_name
+    local email
+    local role
+    local group
+    local password
+    local password2
+    local rc
+
+    read -r -p "Username: " username
+
+    validate_username "$username" ||
+        die "username may contain only A-Z, a-z, 0-9, ., _, @ and -"
+
+    read -r -p "Display name: " display_name
+    read -r -p "Email: " email
+    read -r -p "Role [admin/manager/developer/qa/support/devops/customer]: " role
+
+    group="$(normalize_role "$role")" ||
+        die "unknown human role: $role"
+
+    read -r -s -p "Password: " password
+    printf '\n'
+    read -r -s -p "Repeat password: " password2
+    printf '\n'
+
+    if [ -z "$password" ]; then
+        unset password password2
+        die "password cannot be empty"
+    fi
+
+    if [ "$password" != "$password2" ]; then
+        unset password password2
+        die "passwords do not match"
+    fi
+
+    printf '%s' "$password" |
+        docker exec -i \
+            -e BSYSTEM_USERNAME="$username" \
+            -e BSYSTEM_DISPLAY_NAME="$display_name" \
+            -e BSYSTEM_EMAIL="$email" \
+            -e BSYSTEM_GROUP="$group" \
+            "$AK_CONTAINER" \
+            ak shell -c '
+import os
+import sys
+
+from django.db import transaction
+from authentik.core.models import Group, User
+
+username = os.environ["BSYSTEM_USERNAME"].strip()
+display_name = os.environ["BSYSTEM_DISPLAY_NAME"].strip()
+email = os.environ["BSYSTEM_EMAIL"].strip()
+group_name = os.environ["BSYSTEM_GROUP"]
+password = sys.stdin.read()
+
+if not password:
+    raise RuntimeError("Refusing to set an empty password")
+
+if User.objects.filter(username=username).exists():
+    raise RuntimeError(f"User {username!r} already exists")
+
+group = Group.objects.get(name=group_name)
+
+with transaction.atomic():
+    user = User.objects.create(
+        username=username,
+        name=display_name or username,
+        email=email,
+        type="internal",
+        path="users",
+        is_active=True,
+    )
+
+    user.set_password(password)
+    user.save()
+    user.groups.add(group)
+
+user.refresh_from_db()
+
+print()
+print("Created :", user.username)
+print("Name    :", user.name)
+print("Email   :", user.email)
+print("Active  :", user.is_active)
+print(
+    "Groups  :",
+    list(
+        user.groups
+        .filter(name__startswith="BSYSTEM-")
+        .order_by("name")
+        .values_list("name", flat=True)
+    )
+)
+print("Password:", "OK" if user.check_password(password) else "FAILED")
+'
+
+    rc=$?
+    unset password password2
+
+    if [ "$rc" -ne 0 ]; then
+        return "$rc"
+    fi
+
+    echo
+    echo "User creation: OK"
+    echo "Global ID will be allocated on the first successful HUB login."
+}
+
+cmd_passwd() {
+    local username="$1"
+    local password
+    local password2
+    local rc
+
+    validate_username "$username" || die "invalid username"
+
+    read -r -s -p "New password for $username: " password
+    printf '\n'
+    read -r -s -p "Repeat password: " password2
+    printf '\n'
+
+    if [ -z "$password" ]; then
+        unset password password2
+        die "password cannot be empty"
+    fi
+
+    if [ "$password" != "$password2" ]; then
+        unset password password2
+        die "passwords do not match"
+    fi
+
+    printf '%s' "$password" |
+        docker exec -i \
+            -e BSYSTEM_USERNAME="$username" \
+            "$AK_CONTAINER" \
+            ak shell -c '
+import os
+import sys
+
+from authentik.core.models import User
+
+username = os.environ["BSYSTEM_USERNAME"]
+password = sys.stdin.read()
+
+if not password:
+    raise RuntimeError("Refusing to set an empty password")
+
+qs = User.objects.filter(username=username)
+
+if qs.count() != 1:
+    raise RuntimeError(
+        f"Expected exactly one user {username!r}, found {qs.count()}"
+    )
+
+user = qs.get()
+
+if user.type != "internal":
+    raise RuntimeError(
+        f"User {username!r} is type {user.type!r}; "
+        "password management is allowed only for internal users"
+    )
+
+user.set_password(password)
+user.save()
+user.refresh_from_db()
+
+print()
+print("Username:", user.username)
+print("Password:", "OK" if user.check_password(password) else "FAILED")
+'
+
+    rc=$?
+    unset password password2
+
+    if [ "$rc" -ne 0 ]; then
+        return "$rc"
+    fi
+
+    echo
+    echo "Password reset: OK"
+}
+
+cmd_set_role() {
+    local username="$1"
+    local role="$2"
+    local group
+
+    validate_username "$username" || die "invalid username"
+
+    group="$(normalize_role "$role")" ||
+        die "unknown human role: $role"
+
+    docker exec \
+        -e BSYSTEM_USERNAME="$username" \
+        -e BSYSTEM_TARGET_GROUP="$group" \
+        "$AK_CONTAINER" \
+        ak shell -c '
+import os
+
+from django.db import transaction
+from authentik.core.models import Group, User
+
+username = os.environ["BSYSTEM_USERNAME"]
+target_name = os.environ["BSYSTEM_TARGET_GROUP"]
+
+human_groups = [
+    "BSYSTEM-Admins",
+    "BSYSTEM-Managers",
+    "BSYSTEM-Developers",
+    "BSYSTEM-QA",
+    "BSYSTEM-Support",
+    "BSYSTEM-DevOps",
+    "BSYSTEM-Customers",
+]
+
+with transaction.atomic():
+    # Always acquire the administrator-group lock before any user row lock.
+    # disable uses the same order, which avoids lock-order inversion between
+    # concurrent administrative operations.
+    admin_group = Group.objects.select_for_update().get(
+        name="BSYSTEM-Admins"
+    )
+
+    qs = User.objects.select_for_update().filter(username=username)
+
+    if qs.count() != 1:
+        raise RuntimeError(
+            f"Expected exactly one user {username!r}, found {qs.count()}"
+        )
+
+    user = qs.get()
+
+    if user.groups.filter(name="BSYSTEM-Services").exists():
+        raise RuntimeError(
+            "Refusing to assign a human role to a BSYSTEM-Services identity"
+        )
+
+    target = Group.objects.get(name=target_name)
+
+    was_active_admin = (
+        user.is_active
+        and user.groups.filter(name="BSYSTEM-Admins").exists()
+    )
+
+    if was_active_admin and target_name != "BSYSTEM-Admins":
+        active_admins = list(
+            User.objects
+            .select_for_update()
+            .filter(
+                is_active=True,
+                groups=admin_group,
+            )
+        )
+
+        if len(active_admins) <= 1:
+            raise RuntimeError(
+                "Refusing to remove the role from the last active "
+                "BSYSTEM administrator"
+            )
+
+    old_groups = list(
+        user.groups
+        .filter(name__in=human_groups)
+        .order_by("name")
+        .values_list("name", flat=True)
+    )
+
+    remove_groups = Group.objects.filter(
+        name__in=human_groups
+    ).exclude(name=target_name)
+
+    user.groups.remove(*remove_groups)
+    user.groups.add(target)
+
+    new_groups = list(
+        user.groups
+        .filter(name__in=human_groups)
+        .order_by("name")
+        .values_list("name", flat=True)
+    )
+
+print()
+print("Username :", user.username)
+print("Old role :", old_groups)
+print("New role :", new_groups)
+' || return 1
+
+    echo
+    echo "Role update: OK"
+    echo "The Integration Core mapping updates on the next authenticated request."
+}
+
+cmd_disable() {
+    local username="$1"
+
+    validate_username "$username" || die "invalid username"
+
+    docker exec \
+        -e BSYSTEM_USERNAME="$username" \
+        "$AK_CONTAINER" \
+        ak shell -c '
+import os
+
+from django.db import transaction
+from authentik.core.models import Group, User
+
+username = os.environ["BSYSTEM_USERNAME"]
+
+with transaction.atomic():
+    admin_group = Group.objects.select_for_update().get(
+        name="BSYSTEM-Admins"
+    )
+
+    qs = User.objects.select_for_update().filter(username=username)
+
+    if qs.count() != 1:
+        raise RuntimeError(
+            f"Expected exactly one user {username!r}, found {qs.count()}"
+        )
+
+    user = qs.get()
+
+    if not user.is_active:
+        print()
+        print("Username:", user.username)
+        print("Active  :", user.is_active)
+        print("Already disabled")
+    else:
+        if user.groups.filter(name="BSYSTEM-Admins").exists():
+            active_admins = list(
+                User.objects
+                .select_for_update()
+                .filter(
+                    is_active=True,
+                    groups=admin_group,
+                )
+            )
+
+            if len(active_admins) <= 1:
+                raise RuntimeError(
+                    "Refusing to disable the last active "
+                    "BSYSTEM administrator"
+                )
+
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+
+        print()
+        print("Username:", user.username)
+        print("Active  :", user.is_active)
+' || return 1
+
+    echo
+    echo "Disable: OK"
+}
+
+cmd_enable() {
+    local username="$1"
+
+    validate_username "$username" || die "invalid username"
+
+    docker exec \
+        -e BSYSTEM_USERNAME="$username" \
+        "$AK_CONTAINER" \
+        ak shell -c '
+import os
+
+from authentik.core.models import User
+
+username = os.environ["BSYSTEM_USERNAME"]
+
+qs = User.objects.filter(username=username)
+
+if qs.count() != 1:
+    raise RuntimeError(
+        f"Expected exactly one user {username!r}, found {qs.count()}"
+    )
+
+user = qs.get()
+
+if user.is_active:
+    print()
+    print("Username:", user.username)
+    print("Active  :", user.is_active)
+    print("Already enabled")
+else:
+    user.is_active = True
+    user.save(update_fields=["is_active"])
+
+    print()
+    print("Username:", user.username)
+    print("Active  :", user.is_active)
+' || return 1
+
+    echo
+    echo "Enable: OK"
+}
+
+main() {
+    local command="${1:-help}"
+
+    case "$command" in
+        help|-h|--help)
+            usage
+            return 0
+            ;;
+    esac
+
+    discover_containers
+
+    case "$command" in
+        list)
+            [ "$#" -eq 1 ] || die "usage: bsystem-userctl list"
+            cmd_list
+            ;;
+        show)
+            [ "$#" -eq 2 ] || die "usage: bsystem-userctl show USERNAME"
+            cmd_show "$2"
+            ;;
+        create)
+            [ "$#" -eq 1 ] || die "usage: bsystem-userctl create"
+            cmd_create
+            ;;
+        passwd)
+            [ "$#" -eq 2 ] || die "usage: bsystem-userctl passwd USERNAME"
+            cmd_passwd "$2"
+            ;;
+        set-role)
+            [ "$#" -eq 3 ] || die "usage: bsystem-userctl set-role USERNAME ROLE"
+            cmd_set_role "$2" "$3"
+            ;;
+        disable)
+            [ "$#" -eq 2 ] || die "usage: bsystem-userctl disable USERNAME"
+            cmd_disable "$2"
+            ;;
+        enable)
+            [ "$#" -eq 2 ] || die "usage: bsystem-userctl enable USERNAME"
+            cmd_enable "$2"
+            ;;
+        *)
+            usage >&2
+            printf '\nERROR: unknown command: %s\n' "$command" >&2
+            return 2
+            ;;
+    esac
+}
+
+main "$@"
