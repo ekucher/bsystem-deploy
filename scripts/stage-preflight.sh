@@ -252,6 +252,23 @@ main() {
   optional_var AUTHENTIK_USERINFO_URL
   check_url AUTHENTIK_USERINFO_URL 0
 
+  # Local token validation. Empty keeps the default, where the Core asks
+  # UserInfo once per request.
+  optional_var OIDC_ISSUER_URL
+  check_url OIDC_ISSUER_URL 1
+  if [ -n "${OIDC_ISSUER_URL:-}" ] && [ -z "${OIDC_AUDIENCE:-}" ]; then
+    # Not fatal, and not silent. With no audience configured the platform
+    # accepts a token minted for any client of this issuer — which is fine on
+    # an authentik with one application and an authorization hole on one with
+    # several, and the preflight cannot tell which this is.
+    warn "OIDC_ISSUER_URL is set and OIDC_AUDIENCE is not: a token minted for any client of this issuer will be accepted"
+  fi
+  # There is deliberately no check that one of the two is set. The base
+  # Compose file supplies AUTHENTIK_USERINFO_URL itself, pointing at the
+  # authentik in the same stack, so an empty value here does not mean the
+  # platform cannot authenticate. A check that read it as one was written,
+  # failed two existing tests, and was wrong rather than the tests.
+
   head_ "Source systems"
   for pair in "ESPOCRM_URL ESPOCRM_API_KEY" "REDMINE_URL REDMINE_API_KEY" "OUTLINE_URL OUTLINE_API_KEY"; do
     set -- $pair

@@ -117,6 +117,48 @@ and the Integration Core never read `REDIS_URL`.
 
 The 14 `[!]` items are unaffected and remain the only work left in this backlog.
 
+### P18-P27, and then P28-P36
+
+Two further waves followed, both merged to `main` in every repository they
+touched, with `CI` and `Security` green at each merge commit. P18-P27 hardened
+what existed; P28-P36 is the release-readiness wave, and it is the last
+autonomous foundation work — see the freeze at the end of this file.
+
+| Repository | Pull request | Merge commit | What it landed |
+| --- | --- | --- | --- |
+| `bsystem-deploy` | #28 | `c9eed7e` | P28: the dependency outages, driven from the CI runner, and the fail-fast startup contract they produced |
+| `bsystem-integration-core` | #17 | `de883a9` | P29: a transactional outbox for the three events that cannot be re-derived, and the two subject-convention defects the inventory found |
+| `bsystem-deploy` | #29 | `9f469cf` | P29: a Global ID minted while the broker is stopped, delivered when it returns |
+| `bsystem-integration-core` | #18 | `19125b8` | P30: an authorization change and its audit record in one transaction |
+| `bsystem-integration-core` | #19 | `5682c04` | P31, P32: local JWKS validation with no downgrade to UserInfo; a per-principal limiter on the expensive surfaces |
+| `bsystem-deploy` | #30 | `5f2fdc7` | P31, P32: the configuration, and one noisy identity that does not throttle another |
+| `bsystem-integration-core` | #20 | `c88790c` | P34: the versioning policy, and `apk upgrade` for the CVE the release scan found |
+| `bsystem-hub` | #7 | `4ba8ed9` | P34: the consumer gate's own tests, and the same base-image upgrade |
+| `bsystem-deploy` | #31 | `7cdf13e` | P33, P34, P35: release evidence bound to the exact image, the compatibility block, and a backup runbook CI runs |
+| `bsystem-integration-core` | #21 | `9415138` | P36: the review finding — a discovery document no longer decides where signing keys are fetched from |
+
+Three results from these waves are worth reading as results rather than fixes.
+
+**P29's inventory found two defects before it found a design question.** Three
+of the seven event publishers did not use the subject convention, so a consumer
+subscribed to `bsystem.events.>` — which the convention, the documentation and
+the E2E harness all use — had never received `identity.created`,
+`service_identity.created` or `global_id.created`. The metric counted them
+published. And the Global ID handler announced *every* allocation call,
+including the paths that return an identifier which already existed, so asking
+twice for one source record announced two creations of a thing created once.
+
+**P33's first run found a real vulnerability in the product image.** The
+Security workflow scanned one mock image, on the reasoning that the four mocks
+share a Dockerfile, and nothing had ever scanned the image the platform ships.
+
+**Three tests in P28-P36 failed CI and were themselves what was wrong**, each
+recorded where it was fixed: a per-process delivery counter used to describe a
+queue two Cores drain; an audit comparison that counted its own observation,
+because reading a Global ID is an audited action; and a preflight check that
+read an empty `AUTHENTIK_USERINFO_URL` as "cannot authenticate" when the base
+Compose file supplies it.
+
 # P1 — Autonomous E2E test environment
 
 Priority: CRITICAL
@@ -1996,21 +2038,67 @@ Depends on: P29
 Goal: define which successful operations are allowed to exist without a durable
 audit record, then enforce that policy consistently.
 
-- [ ] inventory all audit-producing read and mutation paths
-- [ ] classify audit events into security-critical mutation, business mutation,
-      sensitive read and informational/operational categories
-- [ ] define fail-closed vs fail-open behavior for each category from existing
+- [x] inventory all audit-producing read and mutation paths
+      — eight: two authorization mutations, three business mutations, two
+      sensitive reads and one informational. Listed in
+      `bsystem-integration-core/docs/AUDIT.md`
+- [x] classify audit events into security-critical mutation, business
+      mutation, sensitive read and informational/operational categories
+- [x] define fail-closed vs fail-open behavior for each category from existing
       security invariants; owner/business decisions remain BLOCKED rather than
       guessed
-- [ ] make security-critical mutations and their audit record atomic where
+      — decided by one question: **if this record is missing, can anyone
+      afterwards establish that the action happened, and who asked for it?**
+      For a notification marked read, an incident raised or a Global ID
+      allocated the answer is yes — the record is still there and the audit
+      row is a convenience for reading a trail. For a scope grant it is no:
+      `principal_scopes` holds the grant and not its provenance, so a grant
+      that took effect without a record is indistinguishable from one nobody
+      made. Nothing here is an owner decision waiting to be taken; each row
+      follows from an invariant the platform already has. Retention *is* a
+      business decision and is `[!]`
+- [x] make security-critical mutations and their audit record atomic where
       technically possible
-- [ ] where atomicity is impossible, make audit failure visible through a
+      — `AddScopeGrant` and `DeleteScopeGrant` write the change and its record
+      in one transaction. Either both rows exist or neither does. It is
+      possible only because both live in the same database, and pretending
+      otherwise elsewhere would mean a distributed transaction across systems
+      that do not have one
+- [x] where atomicity is impossible, make audit failure visible through a
       durable/observable failure state rather than log-only behavior
-- [ ] add metrics and alerts for audit persistence failures
-- [ ] prove a mutation cannot return success when its policy requires a durable
-      audit and the audit write fails
-- [ ] prove low-risk paths do not become globally unavailable from a noncritical
-      audit sink failure when policy says fail-open
+      — the AI audit was the last path whose failure was log-only. An AI
+      request that touched authorized content and left no record is the audit
+      hole nobody can close afterwards, and it looked exactly like a quiet day
+      on every dashboard
+- [x] add metrics and alerts for audit persistence failures
+      — `bsystem_audit_writes_total{action,outcome}`, and two outcomes that
+      need different people: `failed` is an action that happened and is not
+      attributable, `refused` is an action that did not happen. The alert
+      expression is in `bsystem-integration-core/docs/AUDIT.md`
+- [x] prove a mutation cannot return success when its policy requires a
+      durable audit and the audit write fails
+      — against an audit table made to refuse writes by a trigger, which is
+      deterministic and confined to the test's own throwaway database. The
+      assertion is not the 503: it is that the grant **does not appear in the
+      principal's scopes**. A 503 that left the scope granted would be worse
+      than a 201, because nobody would go looking for it
+- [x] prove low-risk paths do not become globally unavailable from a
+      noncritical audit sink failure when policy says fail-open
+      — the same broken table, and an audited read plus an ordinary request
+      both still answer 200 with the failure counted. Fail-closed applied
+      everywhere would turn a bookkeeping failure into an outage, which is its
+      own kind of failure
+
+Findings:
+
+- verified by mutation, each confirmed to land: writing the audit record
+  outside the grant's transaction makes the fail-closed test report a 201 and
+  a granted scope; swallowing the insert error makes the fail-open test find
+  no counter
+- the refusal carries no database detail. This endpoint decides who may see
+  what, and a raw error here names tables and constraints
+- [!] audit **retention** — how long these records are kept, and who may read
+      them — is a business decision and is not made here
 
 Definition of Done:
 - audit durability behavior is explicit per operation class;
@@ -2440,24 +2528,71 @@ Depends on: P28-P35
 Goal: stop expanding the platform foundation and produce one reproducible
 release-candidate set for real stage acceptance.
 
-- [ ] perform a final independent invariant/security review of changes from
+- [x] perform a final independent invariant/security review of changes from
       P28-P35
-- [ ] ensure all non-owner-dependent P28-P35 work is DONE or explicitly
+      — against the ten architectural invariants, and it found one. The OIDC
+      verifier refused a discovery document that named a *different* issuer,
+      and then followed whatever `jwks_uri` that document contained, wherever
+      it pointed. A misconfigured provider — or an answer from something else
+      on the network — could send the Core to any address it can reach and, in
+      the worst case, have it load signing keys from there, after which a
+      token signed with those keys verifies. The key set must now be on the
+      issuer's own origin. Every OIDC provider publishes it there, so a
+      correct deployment pays nothing
+- [x] ensure all non-owner-dependent P28-P35 work is DONE or explicitly
       BLOCKED for a real reason
-- [ ] ensure Integration Core, HUB, Design System and Deploy `main` CI/Security
-      are green
-- [ ] run main-to-main compatibility and Autonomous E2E against the exact RC
+- [x] ensure Integration Core, HUB, Design System and Deploy `main`
+      CI/Security are green
+- [x] run main-to-main compatibility and Autonomous E2E against the exact RC
       commits
-- [ ] generate final compatibility manifest
-- [ ] generate final immutable artifact/release manifest with image digests,
+      — the `Release artifacts` run on `main` resolves both product
+      repositories to `main`, builds the images once and runs the E2E suite
+      against the image it built, so the main-to-main validation and the
+      artifact validation are the same run rather than two that might disagree
+- [x] generate final compatibility manifest
+- [x] generate final immutable artifact/release manifest with image digests,
       commits, schema level and OpenAPI hash
-- [ ] update `docs/HANDOFF.md` with exact RC commits/digests and owner actions
-- [ ] verify stage preflight/smoke scripts against the current RC configuration
-- [ ] explicitly freeze further autonomous foundation feature work after P36;
-      new foundation changes require a defect, failed acceptance check or owner
-      decision
-- [ ] leave real authentik/EspoCRM/Redmine/Outline credentials, customer mapping,
-      SLA policy, DNS/TLS and production deployment BLOCKED
+      — both are CI artifacts of that run rather than files in the
+      repository, which is the point: a manifest committed to git describes
+      what somebody wrote down, and one produced by the run that built the
+      images describes what was built
+- [x] update `docs/HANDOFF.md` with exact RC commits/digests and owner actions
+      — with the commits as a signpost and the manifest named as the record.
+      A table in a document drifts from the artefact the moment either moves
+- [x] verify stage preflight/smoke scripts against the current RC
+      configuration
+      — and the preflight gained a check for the one new configuration
+      mistake that looks like a working deployment: an issuer set with no
+      audience accepts a token minted for any client of that issuer. Writing
+      it also produced a **wrong** check — "neither authentication mode is
+      configured" — which failed two existing tests because the base Compose
+      file supplies `AUTHENTIK_USERINFO_URL` itself. The check was wrong, not
+      the tests; the correct behaviour is now pinned so it is not written
+      again
+- [x] explicitly freeze further autonomous foundation feature work after P36;
+      new foundation changes require a defect, failed acceptance check or
+      owner decision
+      — stated in `docs/HANDOFF.md`. "It would be better if" is not on that
+      list: the platform is at the point where the next thing it needs is
+      contact with reality, and more autonomous building delays that rather
+      than helping it
+- [!] real authentik/EspoCRM/Redmine/Outline credentials, customer mapping,
+      SLA policy, DNS/TLS, a container registry and production deployment
+      remain owner-only. `docs/HANDOFF.md` lists them in execution order
+
+Findings:
+
+- the wave's first Release artifacts run **found a real vulnerability in the
+  product image**, which is the argument for the pipeline existing at all. The
+  Security workflow scanned one mock image, on the reasoning that the four
+  mocks share a Dockerfile, and nothing had ever scanned the image the
+  platform ships. Both product Dockerfiles now `apk upgrade` rather than only
+  `apk add`
+- three tests in this wave failed CI and were themselves the thing that was
+  wrong: the outbox delivery counter is per process and the stack runs two
+  Cores; the audit comparison counted its own observation, because reading a
+  Global ID is an audited action; and the preflight check above. Each is
+  recorded where it was fixed rather than quietly corrected
 
 Definition of Done:
 - one exact RC set is reproducible from GitHub and CI artifacts;
@@ -2487,3 +2622,8 @@ safe item.
 
 After P36, stop autonomous foundation expansion. The next phase is real stage
 acceptance against authentik, EspoCRM, Redmine and Outline.
+
+**Frozen.** P28-P36 are complete and merged. Further foundation work requires a
+defect, a failed acceptance check or an owner decision; defect fixes, security
+patches and answers to failed acceptance checks continue as normal. See
+`docs/HANDOFF.md`.

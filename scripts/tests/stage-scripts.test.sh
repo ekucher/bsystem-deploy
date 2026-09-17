@@ -758,6 +758,59 @@ for output in mocks/mock-identity mocks/mock-espocrm mocks/mock-redmine mocks/mo
 done
 
 
+# --- Token validation configuration ------------------------------------------
+#
+# Two mistakes the preflight has to catch, because both look like a working
+# deployment right up until they do not: an issuer configured with no audience,
+# which accepts a token minted for any client of that issuer; and neither
+# authentication mode configured at all.
+
+preflight_env() {
+  cat > "$PF_WORK/.env" <<ENVEOF
+BIND_ADDRESS=127.0.0.1
+STAGE_PUBLISH_ADDRESS=127.0.0.1
+POSTGRES_PASSWORD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+AUTHENTIK_SECRET_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+VITE_OIDC_AUTHORITY=https://authentik.example/application/o/bsystem-hub/
+VITE_OIDC_CLIENT_ID=placeholder
+$1
+ENVEOF
+}
+
+PF_WORK="$(mktemp -d)"
+trap 'rm -rf "$PF_WORK"' EXIT
+
+preflight_env "AUTHENTIK_USERINFO_URL=https://authentik.example/application/o/userinfo/
+OIDC_ISSUER_URL=https://authentik.example/application/o/bsystem-hub/"
+pf_output="$(cd "$PF_WORK" && bash "$OLDPWD/scripts/stage-preflight.sh" 2>&1 || true)"
+if contains "$pf_output" "OIDC_AUDIENCE"; then
+  ok "an issuer with no audience is reported"
+else
+  bad "an issuer with no audience was not reported: $pf_output"
+fi
+
+preflight_env "AUTHENTIK_USERINFO_URL=https://authentik.example/application/o/userinfo/
+OIDC_ISSUER_URL=https://authentik.example/application/o/bsystem-hub/
+OIDC_AUDIENCE=bsystem-hub"
+pf_output="$(cd "$PF_WORK" && bash "$OLDPWD/scripts/stage-preflight.sh" 2>&1 || true)"
+if contains "$pf_output" "OIDC_AUDIENCE is not"; then
+  bad "a correctly configured issuer was reported anyway: $pf_output"
+else
+  ok "an issuer with an audience is not reported"
+fi
+
+# And a deployment that sets neither is not reported, because the base Compose
+# file supplies AUTHENTIK_USERINFO_URL itself. A check that read an empty value
+# as "cannot authenticate" was written here and was wrong; this pins the
+# correct behaviour so it is not written again.
+preflight_env ""
+pf_output="$(cd "$PF_WORK" && bash "$OLDPWD/scripts/stage-preflight.sh" 2>&1 || true)"
+if contains "$pf_output" "cannot authenticate"; then
+  bad "an empty AUTHENTIK_USERINFO_URL was reported, but Compose supplies it: $pf_output"
+else
+  ok "an empty AUTHENTIK_USERINFO_URL is not reported, because Compose supplies it"
+fi
+
 # --- Release artifact identity ----------------------------------------------
 #
 # The property the release pipeline exists for: the artifact that was tested is

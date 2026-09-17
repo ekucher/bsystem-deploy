@@ -149,18 +149,76 @@ Blocked upstream rather than by choice: `typescript-eslint` supports
 forcing an unsupported resolution or downgrading the compiler. The HUB is
 typechecked and tested; it is linting specifically that waits on upstream.
 
-## Two things this wave could not demonstrate
+## What is still not demonstrated
 
-Recorded so they are not mistaken for oversights.
-
-**NATS unavailable, and PostgreSQL unavailable during readiness.** Readiness
-already distinguishes both — `nats: degraded` without making the platform
-unready, and 503 with `database: error` when the pool cannot ping. What is
-missing is the demonstration: the scenarios talk HTTP and the NATS wire
-protocol to a *running* stack and cannot stop a container mid-suite. Proving
-recovery in particular needs container lifecycle control in the E2E job.
+Recorded so it is not mistaken for an oversight.
 
 **A dependency dropped from a manifest but still described in prose.** A removed
 service is caught the moment a document names it in a Compose command, and a
 removed file the moment a document links to it. A dependency described only in
 prose is not.
+
+The two dependency-outage items that stood here through the previous wave —
+NATS unavailable, and PostgreSQL unavailable during readiness — are **closed**.
+The limit recorded against them was the harness's and it was the wrong limit:
+the test binary runs on the CI runner, next to the Docker daemon, and could
+always have driven `docker compose` itself. Both outages are now executed on
+every run, along with a cold start against an absent database.
+
+## The release candidate
+
+Autonomous foundation work is **frozen** as of this document. What follows is
+the set an owner accepts against a real stage.
+
+### The commits
+
+| Repository | Commit |
+| --- | --- |
+| `bsystem-integration-core` | `9415138` |
+| `bsystem-hub` | `4ba8ed9` |
+| `bsystem-design-system` | `03fb5d7` |
+| `bsystem-deploy` | the commit carrying this document — recorded exactly in the manifest below |
+
+Do not read the first three from here when precision matters. Every
+`Release artifacts` run on `main` writes `release-manifest.json`, which records
+all four commits, the schema level, the OpenAPI hash, the Design System version
+and the **identity of each image that was tested and scanned**. That file is
+the record; this table is a signpost.
+
+### Where the evidence is
+
+From the latest green `Release artifacts` run on `bsystem-deploy` `main`,
+artifact `release-candidate`:
+
+| File | What it answers |
+| --- | --- |
+| `release-manifest.json` | what this release *is* |
+| `built.json` | which exact images were tested, scanned and described |
+| `provenance.json` | which workflow run produced them, from which commits |
+| `sbom-integration-core.cyclonedx.json`, `sbom-hub.cyclonedx.json` | what is inside each image — the next advisory is answerable from these without a re-scan |
+
+And from `Autonomous E2E` on the same commit, artifact
+`compatibility-manifest`: which Core commit the deployment repository was
+validated against.
+
+### What is green, and what that means
+
+Every autonomous check passes on this set: CI, Security and Release artifacts
+on `bsystem-deploy`; CI and Security on the Integration Core, the HUB and the
+Design System. The E2E suite runs the platform against four deterministic mock
+upstreams, stops its dependencies and restores its database.
+
+**It has never run against a real system.** Every credential in it is a
+documented placeholder, every fixture is invented, and the four upstreams are
+mocks written to the contract rather than the systems themselves. That is the
+whole reason the list above this section exists.
+
+### After the freeze
+
+New foundation work needs one of three things: a defect, a failed acceptance
+check, or an owner decision. "It would be better if" is not on that list — the
+platform is at the point where the next thing it needs is contact with reality,
+and more autonomous building delays that rather than helping it.
+
+Defect fixes, security patches and answers to failed acceptance checks continue
+as normal.
