@@ -252,6 +252,11 @@ main() {
   optional_var AUTHENTIK_USERINFO_URL
   check_url AUTHENTIK_USERINFO_URL 0
 
+  optional_var BSYSTEM_AUTHENTIK_ADMIN_TOKEN secret
+  if [ -n "${BSYSTEM_AUTHENTIK_ADMIN_TOKEN:-}" ] && [ "${#BSYSTEM_AUTHENTIK_ADMIN_TOKEN}" -lt 32 ]; then
+    fail "BSYSTEM_AUTHENTIK_ADMIN_TOKEN is shorter than 32 characters; generate a high-entropy token"
+  fi
+
   # Local token validation. Empty keeps the default, where the Core asks
   # UserInfo once per request.
   optional_var OIDC_ISSUER_URL
