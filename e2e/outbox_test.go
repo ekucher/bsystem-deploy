@@ -58,6 +58,21 @@ func matchesLabels(rest string, labels map[string]string) bool {
 	return true
 }
 
+// deliveredAcrossTheStack sums a counter over both Integration Cores.
+//
+// The stack runs two cores against one database, and the outbox hands each
+// claimed row to whichever publisher took it. So the delivery of a given event
+// is counted on exactly one of them, and a scenario watching only the core it
+// made its request to will miss the half of the deliveries the other one did.
+//
+// This is the test being wrong rather than the platform: taking disjoint rows
+// is the property that makes two cores drain faster instead of delivering
+// everything twice. The counter is per process; the queue is not.
+func (h *Harness) deliveredAcrossTheStack(t *testing.T, name string, labels map[string]string) float64 {
+	t.Helper()
+	return h.metricOrZero(t, h.Core, name, labels) + h.metricOrZero(t, h.Partial, name, labels)
+}
+
 func (h *Harness) metricOrZero(t *testing.T, base, name string, labels map[string]string) float64 {
 	t.Helper()
 	value, _, err := h.Metric(base, name, labels)
@@ -83,7 +98,7 @@ func TestAGlobalIDMintedWhileTheBrokerIsDownIsAnnouncedWhenItReturns(t *testing.
 	const queued = "bsystem_event_outbox_events"
 	const attempts = "bsystem_event_outbox_attempts_total"
 	deliveredLabels := map[string]string{"subject": "bsystem.events.global_id.created", "outcome": "delivered"}
-	deliveredBefore := harness.metricOrZero(t, harness.Core, attempts, deliveredLabels)
+	deliveredBefore := harness.deliveredAcrossTheStack(t, attempts, deliveredLabels)
 
 	control.Stop(t, ServiceNATS)
 
@@ -123,7 +138,7 @@ func TestAGlobalIDMintedWhileTheBrokerIsDownIsAnnouncedWhenItReturns(t *testing.
 		return depth == 0, fmt.Sprintf("queued = %v", depth)
 	})
 	waitFor(t, "the announcement to be acknowledged by the broker", 60*time.Second, func() (bool, string) {
-		now := harness.metricOrZero(t, harness.Core, attempts, deliveredLabels)
+		now := harness.deliveredAcrossTheStack(t, attempts, deliveredLabels)
 		return now > deliveredBefore, fmt.Sprintf("delivered = %v, was %v", now, deliveredBefore)
 	})
 
@@ -150,7 +165,7 @@ func TestOneSourceRecordIsAnnouncedOnceHoweverOftenItIsRequested(t *testing.T) {
 		depth := harness.metricOrZero(t, harness.Core, "bsystem_event_outbox_events", map[string]string{"state": "queued"})
 		return depth == 0, fmt.Sprintf("queued = %v", depth)
 	})
-	before := harness.metricOrZero(t, harness.Core, attempts, labels)
+	before := harness.deliveredAcrossTheStack(t, attempts, labels)
 
 	sourceID := fmt.Sprintf("e2e-once-%d", time.Now().UnixNano())
 	body := map[string]any{"entity_type": "client", "source": "e2e", "source_id": sourceID}
@@ -168,12 +183,12 @@ func TestOneSourceRecordIsAnnouncedOnceHoweverOftenItIsRequested(t *testing.T) {
 	// Exactly one delivery, not four. The wait is for the publisher's pass;
 	// the assertion is on the count.
 	waitFor(t, "the single announcement to be delivered", 60*time.Second, func() (bool, string) {
-		now := harness.metricOrZero(t, harness.Core, attempts, labels)
+		now := harness.deliveredAcrossTheStack(t, attempts, labels)
 		return now >= before+1, fmt.Sprintf("delivered = %v, was %v", now, before)
 	})
 	// Give any further announcement a pass or two to appear before counting.
 	time.Sleep(6 * time.Second)
-	after := harness.metricOrZero(t, harness.Core, attempts, labels)
+	after := harness.deliveredAcrossTheStack(t, attempts, labels)
 	if after != before+1 {
 		t.Errorf("four allocation calls for one source record produced %v deliveries, want 1", after-before)
 	}

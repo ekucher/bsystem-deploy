@@ -1967,6 +1967,13 @@ Findings:
   connection survives a rollback and fails the transaction test; marking
   delivered without an acknowledgement fails the failure test; dropping the
   immediate follow-up pass leaves a backlog undrained
+- the first CI run failed and the test was the thing that was wrong. The
+  delivery counter is per process and the stack runs two Cores against one
+  database, so a row claimed by the second Core is counted there and nowhere
+  else. A scenario watching only the core it made its request to misses every
+  delivery the other one did. Taking disjoint rows is the property that makes
+  two publishers drain faster instead of delivering twice; the counter is per
+  process and the queue is not. The scenarios sum across both
 - the E2E scenarios assert through `/metrics` rather than by subscribing to
   the bus. A core NATS subscriber only receives what is published while it is
   subscribed, so a test that stops the broker, produces an event and
