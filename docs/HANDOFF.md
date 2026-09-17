@@ -174,7 +174,7 @@ the set an owner accepts against a real stage.
 
 | Repository | Commit |
 | --- | --- |
-| `bsystem-integration-core` | `9415138` |
+| `bsystem-integration-core` | `e3393b8` |
 | `bsystem-hub` | `4ba8ed9` |
 | `bsystem-design-system` | `03fb5d7` |
 | `bsystem-deploy` | the commit carrying this document — recorded exactly in the manifest below |
@@ -184,6 +184,15 @@ Do not read the first three from here when precision matters. Every
 all four commits, the schema level, the OpenAPI hash, the Design System version
 and the **identity of each image that was tested and scanned**. That file is
 the record; this table is a signpost.
+
+The Integration Core moved once after the freeze, from `9415138` to `e3393b8`:
+`actions/checkout` to v7 and `actions/setup-go` to v7, which this repository and
+the HUB had taken in an earlier wave and the Core had not. checkout v6 persists
+credentials to a separate file rather than the repository's git config, and v7
+refuses to check out a fork's pull request under `pull_request_target` and
+`workflow_run`. That is a security patch, which the freeze allows explicitly —
+it changes no product code and no image content, only how CI checks the
+repository out.
 
 ### Where the evidence is
 
