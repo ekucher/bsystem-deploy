@@ -31,3 +31,5 @@ mocks/mock-redmine
 # tracked one there.
 __pycache__/
 *.pyc
+authentik/exports/
+docker-compose.yml.bak.*

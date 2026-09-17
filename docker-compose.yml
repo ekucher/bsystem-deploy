@@ -73,6 +73,7 @@ services:
       - "${BIND_ADDRESS:-127.0.0.1}:9443:9443"
     volumes:
       - ./authentik/blueprints/bsystem-groups.yaml:/blueprints/bsystem-groups.yaml:ro
+      - ./authentik/blueprints/custom:/blueprints/custom:ro
     networks: [frontend, data]
 
   authentik-worker:
@@ -88,6 +89,7 @@ services:
         condition: service_healthy
     volumes:
       - ./authentik/blueprints/bsystem-groups.yaml:/blueprints/bsystem-groups.yaml:ro
+      - ./authentik/blueprints/custom:/blueprints/custom:ro
     networks: [data]
 
   integration-core:
