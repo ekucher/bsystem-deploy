@@ -55,6 +55,13 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
 		os.Exit(1)
 	}
+	// The same refusal one level down: a required run whose lifecycle
+	// scenarios cannot stop a dependency would skip every outage scenario and
+	// still exit zero. See lifecycle.go.
+	if err := checkLifecycleRequired(os.Getenv("E2E_LIFECYCLE"), os.Getenv("E2E_REQUIRED")); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
+		os.Exit(1)
+	}
 	os.Exit(m.Run())
 }
 

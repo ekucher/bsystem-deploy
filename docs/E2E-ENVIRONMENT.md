@@ -138,6 +138,46 @@ expected to actually run.
 | Circuit breaker | a sustained outage is shed, reported in `/readyz` and `/metrics` without making the platform unready, leaves other adapters serving, and closes again on recovery |
 | Secret safety | no rejection or upstream error discloses a credential, an internal hostname or a stack trace |
 | Events | a service-published envelope reaches `bsystem.events.<event>` with its `SVC-*` actor and request ID; publishing is refused to humans and validated |
+| Dependency outages | NATS is stopped and the platform keeps serving and reconnects on its own; PostgreSQL is stopped and the platform becomes unready without describing its database, then recovers without a restart; a core started with no database never serves and comes up once the database returns |
+
+## Dependency outages
+
+Until this wave the suite could only observe a stack that was fully up, which
+left the behaviour written down in `docs/STAGE-ACCEPTANCE.md` as a design
+statement nothing executed. The outage scenarios stop and start dependency
+containers and read what the platform actually does.
+
+The control surface is outside the stack. The test binary runs on the CI
+runner, next to the Docker daemon, and drives `docker compose` itself. **No
+container is given the Docker socket** and no application container gains a
+capability: the compose files are unchanged by any of this.
+
+What may be stopped is an allowlist, not an argument — `nats`, `postgres` and
+the spare `integration-core-no-outline`. The primary Integration Core is
+deliberately not on it: every other scenario in the package asserts against it,
+and a restart from a lifecycle test would surface as an unrelated failure
+elsewhere in the suite.
+
+```bash
+# opt in; the scenarios are destructive to a stack somebody may be using
+E2E_LIFECYCLE=1 E2E_COMPOSE_FILE=../docker-compose.e2e.yml go test -run Lifecycle -C e2e ./...
+```
+
+`E2E_LIFECYCLE` is opt-in locally and mandatory in CI. With `E2E_REQUIRED` set
+and `E2E_LIFECYCLE` empty the suite refuses to start, because the alternative
+is every outage scenario skipping and the job exiting zero — the same silent
+skip `required_test.go` exists to prevent, one level down.
+
+### Cold start with no database
+
+A running platform losing its database and a platform starting without one are
+different contracts. The Integration Core **fails fast**: it cannot open the
+database at startup, so it exits rather than serving while unable to answer
+anything, and recovery is the restart policy's job. The E2E services carry
+`restart: unless-stopped`, so a core that starts against an absent database
+crash-loops and comes up on its own once the database returns. A scenario pins
+both ends of that: there is no window in which such a core answers `/readyz`
+with `200`, and no intervention is needed once PostgreSQL is back.
 
 ## Fault injection
 

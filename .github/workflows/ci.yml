@@ -333,7 +333,17 @@ jobs:
           E2E_REDMINE_URL: http://127.0.0.1:8091
           E2E_OUTLINE_URL: http://127.0.0.1:8092
           E2E_NATS_ADDR: 127.0.0.1:4222
-        run: go test -v -count=1 -timeout 15m ./...
+          # The outage scenarios stop and start dependency containers. They are
+          # opt-in because they are destructive to a stack somebody may be
+          # using, and mandatory here: with E2E_REQUIRED set, a run that cannot
+          # reach Docker refuses to start rather than skipping every one of
+          # them and exiting zero. See e2e/lifecycle.go.
+          E2E_LIFECYCLE: "1"
+          E2E_COMPOSE_FILE: ../docker-compose.e2e.yml
+          # docker compose reads the whole file for any subcommand, including
+          # stop, so the build context has to resolve here too.
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: go test -v -count=1 -timeout 25m ./...
 
       - name: Collect stack logs on failure
         if: failure()
