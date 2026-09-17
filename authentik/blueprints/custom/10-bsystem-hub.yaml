@@ -8,6 +8,33 @@ metadata:
 entries:
 
   # ============================================================
+  # BSYSTEM-HUB Provider-specific invalidation flow
+  # ============================================================
+
+  - id: bsystem-hub-invalidation-flow
+    model: authentik_flows.flow
+
+    identifiers:
+      slug: bsystem-hub-invalidation-flow
+
+    attrs:
+      designation: invalidation
+      name: BSYSTEM-HUB logout
+      title: "You've logged out of BSYSTEM-HUB."
+      authentication: none
+
+  - id: bsystem-hub-invalidation-logout-binding
+    model: authentik_flows.flowstagebinding
+
+    identifiers:
+      order: 0
+      stage: !Find
+        - authentik_stages_user_logout.userlogoutstage
+        - [name, default-invalidation-logout]
+      target: !KeyOf bsystem-hub-invalidation-flow
+
+
+  # ============================================================
   # BSYSTEM-HUB OAuth2 / OpenID Connect Provider
   # ============================================================
 
@@ -22,9 +49,7 @@ entries:
         - authentik_flows.flow
         - [slug, default-provider-authorization-implicit-consent]
 
-      invalidation_flow: !Find
-        - authentik_flows.flow
-        - [slug, default-provider-invalidation-flow]
+      invalidation_flow: !KeyOf bsystem-hub-invalidation-flow
 
       client_type: public
 
@@ -86,7 +111,7 @@ entries:
       group: BSYSTEM-HUB
       policy_engine_mode: any
 
-      meta_launch_url: https://hub.byte.pp.ua
+      meta_launch_url: http://localhost:8081
       meta_publisher: BSYSTEM
       meta_description: BSYSTEM centralized workspace
 
