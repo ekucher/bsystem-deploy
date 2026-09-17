@@ -127,6 +127,12 @@ query produced by the original many-to-many lookup. The final implementation
 locks the administrator group first and queries users through that exact group
 relation without `DISTINCT`.
 
+The HUB/Integration Core mutation path applies the same final-active-admin
+invariant and serializes **Core-originated** account mutations with a PostgreSQL
+advisory lock shared by all Integration Core replicas. This is not a global
+authentik lock: an administrator changing memberships directly in authentik's
+own UI/API does not participate in that lock and can bypass this BSYSTEM guard.
+
 ## Global User IDs
 
 Creating a user in authentik does not allocate a Global User ID.
