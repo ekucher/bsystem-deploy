@@ -91,9 +91,26 @@ design_system_version() {
   grep -m1 '"version"' "$file" | sed 's/.*"version"[[:space:]]*:[[:space:]]*"//; s/".*//' || printf 'unknown'
 }
 
+# The images this release is made of, as recorded at the moment they were
+# built. Read from a file rather than inspected here, so the manifest describes
+# the artifact that was tested and scanned rather than whatever happens to be
+# tagged when the manifest is generated — which is the same thing only if
+# nothing rebuilt in between, and "only if" is what the pipeline is for. See
+# scripts/image-digests.py.
+images_object() {
+  local file="${RELEASE_IMAGES:-}"
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    printf 'null'
+    return
+  fi
+  # Emitted verbatim: it is already JSON, written by the recorder.
+  cat "$file"
+}
+
 cat <<JSON
 {
   "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "images": $(images_object),
   "repositories": {
 $(repo_object "bsystem-deploy" "."),
 $(repo_object "bsystem-integration-core" "$CORE_DIR"),

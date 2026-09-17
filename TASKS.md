@@ -2186,19 +2186,63 @@ Depends on: P28-P32
 Goal: ensure the artifact scanned, described and promoted is the exact artifact
 that CI tested, not a later rebuild from the same source.
 
-- [ ] define releasable artifacts for Integration Core and HUB; keep mocks/test
+- [x] define releasable artifacts for Integration Core and HUB; keep mocks/test
       images separate from product artifacts
-- [ ] build each release image once per commit
-- [ ] tag by immutable commit SHA and record image digest
-- [ ] use the exact built image for runtime/E2E validation where practical
-- [ ] scan that exact image with Trivy rather than a rebuild
-- [ ] generate SBOM from that exact image and bind it to its digest
-- [ ] generate provenance/attestation with repository, commit, workflow run and
+      — the two product images are release artifacts; the mocks and the two Go
+      harnesses are not, and the E2E override deliberately leaves the mocks
+      building from source. A manifest that described a test fixture would be
+      describing something no deployment runs
+- [x] build each release image once per commit
+- [x] tag by immutable commit SHA and record image digest
+      — a commit SHA is the only name that cannot later be reused for
+      something else. A local image has no registry digest until it is pushed,
+      so the identity recorded is the **image ID**: the sha256 of its
+      configuration, which covers its layers, is immutable for a given build,
+      and changes if anything about the image changes
+- [x] use the exact built image for runtime/E2E validation where practical
+      — `docker-compose.e2e.images.yml`, and the absence of `--build` is the
+      whole mechanism: with an `image:` set and no `--build`, Compose uses what
+      is there rather than making another one
+- [x] scan that exact image with Trivy rather than a rebuild
+- [x] generate SBOM from that exact image and bind it to its digest
+- [x] generate provenance/attestation with repository, commit, workflow run and
       digest; do not add signing credentials unless owner-configured
-- [ ] publish release manifest as CI artifact containing image digests, schema
+      — unsigned, and `provenance.json` says so in the document itself rather
+      than only in the documentation: it records origin, not authenticity. A
+      signature needs a key the owner has not configured
+- [x] publish release manifest as CI artifact containing image digests, schema
       level, OpenAPI hash, HUB/Core commits and compatibility manifest
-- [ ] verify a digest mismatch between tested/scanned/reported artifacts fails CI
-- [ ] document promotion flow without performing a production deployment
+      — `release-manifest.sh` gained an `images` block, read from the file
+      written at build time rather than inspected when the manifest is
+      generated. Those are the same thing only if nothing rebuilt in between,
+      and "only if" is what the pipeline exists to remove
+- [x] verify a digest mismatch between tested/scanned/reported artifacts fails
+      CI
+      — two checks, not one. The identities are re-read at the end and
+      compared with what was built, and the generated manifest is compared
+      with the same file, so a manifest that described a different image would
+      fail even if nothing had been rebuilt
+- [x] document promotion flow without performing a production deployment
+      — `docs/RELEASE.md`. Steps 4 to 6 need a registry credential and a
+      deployment target and are `[!]` below
+
+Findings:
+
+- a check that only ever sees matching identities has never been shown to
+  detect a mismatch, so `scripts/image-digests.py` is exercised from both
+  directions with the readings supplied from files — reproducing the failure
+  with real images would mean corrupting one. An unchanged pair verifies, a
+  rebuilt image is caught **by name**, a vanished one is caught, and a
+  manifest recording no image at all is refused rather than trivially verified
+- **the HUB image this pipeline builds is not deployable.** The HUB bakes its
+  OIDC issuer and client id in at build time, so a release image is specific
+  to the authentik it was built for. The pipeline proves the image builds,
+  scans clean and is described; a deployable one is built by the owner with
+  their own issuer, and its identity will differ from the manifest's. That is
+  recorded rather than papered over with a placeholder nobody reads
+- [!] pushing the images to a registry needs a registry credential, and
+      deploying them needs a target. Both owner-only; see `docs/RELEASE.md`
+      and `docs/HANDOFF.md`
 
 Definition of Done:
 - one immutable digest identifies what was tested, scanned and described;

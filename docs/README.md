@@ -7,6 +7,7 @@
 | [AUTHENTIK-OIDC.md](AUTHENTIK-OIDC.md) | identity provider setup |
 | [SERVICE-IDENTITIES.md](SERVICE-IDENTITIES.md) | machine callers |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | how the pieces fit |
+| [RELEASE.md](RELEASE.md) | what a release candidate is, how the evidence is bound to the exact image, and what promotion still needs from the owner |
 | [../SECURITY.md](../SECURITY.md) | what is enforced, and the current hardening state |
 
 ## Canonical files

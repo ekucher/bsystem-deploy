@@ -1,0 +1,25 @@
+# Run the E2E stack against images that already exist, rather than building.
+#
+# The release pipeline builds each product image once per commit and then has
+# to validate, scan and describe *that* image. Compose would otherwise rebuild
+# from the same source — which usually produces the same thing and sometimes
+# does not, because a base image moved or a dependency resolved differently,
+# and "usually" is what this pipeline exists to remove.
+#
+#   CORE_IMAGE=bsystem-integration-core:<sha> \
+#     docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.images.yml up -d --wait
+#
+# Note the absence of --build. With an `image:` set and no --build, Compose
+# uses what is already there.
+#
+# The mock upstreams are deliberately not overridden. They are test fixtures,
+# not product artifacts, and the release manifest describes what is deployed.
+
+services:
+  integration-core:
+    image: ${CORE_IMAGE:?CORE_IMAGE must name the exact image this release was built from}
+    build: !reset null
+
+  integration-core-no-outline:
+    image: ${CORE_IMAGE:?CORE_IMAGE must name the exact image this release was built from}
+    build: !reset null

@@ -758,6 +758,59 @@ for output in mocks/mock-identity mocks/mock-espocrm mocks/mock-redmine mocks/mo
 done
 
 
+# --- Release artifact identity ----------------------------------------------
+#
+# The property the release pipeline exists for: the artifact that was tested is
+# the artifact that was scanned and the artifact that is described. A check
+# that only ever sees matching identities has never been shown to detect a
+# mismatch, so both directions are exercised here — with the readings supplied
+# from files, because reproducing the failure with real images would mean
+# corrupting one.
+
+DIGEST_WORK="$(mktemp -d)"
+trap 'rm -rf "$DIGEST_WORK"' EXIT
+
+cat > "$DIGEST_WORK/recorded.json" <<'JSON'
+{
+  "hub": {"tag": "bsystem-hub:abc123", "id": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
+  "integration-core": {"tag": "bsystem-integration-core:abc123", "id": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}
+}
+JSON
+
+cp "$DIGEST_WORK/recorded.json" "$DIGEST_WORK/unchanged.json"
+digest_output="$(python3 scripts/image-digests.py verify "$DIGEST_WORK/recorded.json" --from-file "$DIGEST_WORK/unchanged.json" 2>&1)"
+check "$?" "0" "an unchanged pair of images verifies"
+if contains "$digest_output" "2 image(s) unchanged"; then
+  ok "the verification says how many images it compared"
+else
+  bad "the verification does not say what it checked: $digest_output"
+fi
+
+sed 's/sha256:2222/sha256:9999/' "$DIGEST_WORK/recorded.json" > "$DIGEST_WORK/rebuilt.json"
+digest_output="$(python3 scripts/image-digests.py verify "$DIGEST_WORK/recorded.json" --from-file "$DIGEST_WORK/rebuilt.json" 2>&1)"
+check "$?" "1" "an image rebuilt between scanning and describing is caught"
+if contains "$digest_output" "integration-core"; then
+  ok "the mismatch names which image moved"
+else
+  bad "the mismatch does not name the image: $digest_output"
+fi
+
+python3 - "$DIGEST_WORK" <<'PYEOF'
+import json, sys
+work = sys.argv[1]
+with open(f"{work}/recorded.json", encoding="utf-8") as handle:
+    recorded = json.load(handle)
+del recorded["hub"]
+with open(f"{work}/vanished.json", "w", encoding="utf-8") as handle:
+    json.dump(recorded, handle)
+PYEOF
+digest_output="$(python3 scripts/image-digests.py verify "$DIGEST_WORK/recorded.json" --from-file "$DIGEST_WORK/vanished.json" 2>&1)"
+check "$?" "1" "an image that no longer exists is caught"
+
+printf '{}' > "$DIGEST_WORK/empty.json"
+digest_output="$(python3 scripts/image-digests.py verify "$DIGEST_WORK/empty.json" 2>&1)"
+check "$?" "1" "a manifest recording no image is refused rather than trivially verified"
+
 echo
 printf '%d passed, %d failed\n' "$PASSED" "$FAILED"
 [ "$FAILED" -gt 0 ] && exit 1
