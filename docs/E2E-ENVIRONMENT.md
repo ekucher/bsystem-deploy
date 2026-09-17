@@ -88,6 +88,17 @@ that production-length windows would make them sleep through:
 quickly, and `ADAPTER_CIRCUIT_OPEN_FOR` to 3s, so an upstream can be seen
 being shed and then recovering.
 
+It also raises the rate limits on the fully configured core. The suite is a
+load generator rather than a session — hundreds of requests a second as one
+identity — which is exactly what the production defaults exist to refuse. They
+are raised and not disabled, so every run still exercises the middleware and
+its wiring; the mechanism itself is proved on the spare core, whose search
+allowance is turned *down* to something a scenario can reach.
+
+A load run has the same problem for the same reason: `loadtest/` drives the
+platform as one identity, so raise the allowances on whatever stack it is
+pointed at or the run measures the limiter.
+
 Note that a scenario asserting an upstream *failure* must inject a fault that
 outlasts the retry budget. A single injected fault is retried away — which is
 the adapter behaving correctly, but says nothing about how a real outage
