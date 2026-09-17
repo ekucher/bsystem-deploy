@@ -26,7 +26,7 @@ entries:
         - authentik_flows.flow
         - [slug, default-provider-invalidation-flow]
 
-      client_type: confidential
+      client_type: public
 
       grant_types:
         - authorization_code
