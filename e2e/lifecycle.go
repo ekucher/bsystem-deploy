@@ -22,6 +22,7 @@ package e2e
 // platform defect rather than a test that reached too far.
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -190,6 +191,55 @@ func (l *Lifecycle) Restart(t *testing.T, service string) {
 	if _, err := l.compose("restart", "--timeout", "10", service); err != nil {
 		t.Fatalf("restart %s: %v", service, err)
 	}
+}
+
+// Exec runs a command inside a stack container and returns its stdout.
+//
+// It is how the backup scenario reaches pg_dump and psql. The database is on
+// an internal network and is not published, deliberately — the stack's own
+// isolation is worth keeping, and a scenario that needed the port opened would
+// have weakened the thing it is testing against.
+//
+// Stdin is closed (-T), because a compose exec attached to a terminal that is
+// not there hangs rather than failing.
+func (l *Lifecycle) Exec(t *testing.T, service string, args ...string) string {
+	t.Helper()
+	if err := checkControllable(service); err != nil {
+		t.Fatalf("%v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	full := append([]string{"compose", "-f", l.composeFile, "exec", "-T", service}, args...)
+	command := exec.CommandContext(ctx, "docker", full...)
+	command.Dir = filepath.Dir(l.composeFile)
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		t.Fatalf("exec in %s: %v (stderr: %s)", service, err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String()
+}
+
+// ExecInput runs a command inside a stack container with input on stdin.
+func (l *Lifecycle) ExecInput(t *testing.T, service, input string, args ...string) string {
+	t.Helper()
+	if err := checkControllable(service); err != nil {
+		t.Fatalf("%v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+	full := append([]string{"compose", "-f", l.composeFile, "exec", "-T", service}, args...)
+	command := exec.CommandContext(ctx, "docker", full...)
+	command.Dir = filepath.Dir(l.composeFile)
+	command.Stdin = strings.NewReader(input)
+	var stdout, stderr bytes.Buffer
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		t.Fatalf("exec in %s: %v (stderr: %s)", service, err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String()
 }
 
 // StartedAt reports when a service's container last started.

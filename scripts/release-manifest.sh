@@ -127,6 +127,13 @@ $(repo_object "bsystem-design-system" "$DS_DIR")
   },
   "design_system": {
     "version": "$(design_system_version)"
+  },
+  "compatibility": {
+    "api_versions": ["/api/v1", "/api/service/v1"],
+    "schema_supports_upgrade_from": "any earlier level; there is no downward migration",
+    "older_core_against_this_schema": "unsupported",
+    "hub_core_declaration": "validated pair, not a version range: the commits above were verified together",
+    "policy": "bsystem-integration-core/docs/VERSIONING.md"
   }
 }
 JSON

@@ -160,6 +160,66 @@ The third and last bullets are the ones that catch a restore that "worked". A
 Global ID that changed, or a scope grant that vanished, is a successful restore
 of a broken state.
 
+## What CI proves about this procedure
+
+The `Backup and restore` job runs the procedure on every CI run, against the
+autonomous E2E stack, and the scenario is
+`TestABackupOfAUsedPlatformRestoresIntoAFreshDatabase`.
+
+It uses a platform that has been **used**: every category below is written
+through the platform's own API first, so what is backed up is what the
+platform actually produces rather than rows a test invented.
+
+| Written before the backup | Checked after the restore |
+| --- | --- |
+| a human identity and its `USR-*` | the same `USR-*`, byte for byte |
+| a service identity | its records still resolve |
+| a Global ID mapping | the same `CL-*`, and the counter continues rather than restarting |
+| an RBAC scope grant | the same grants, as the API renders them |
+| the audit trail | the same number of entries |
+| a notification | the same number |
+| an operations record and a support record | both still readable by id |
+
+Then the database is **dropped** and recreated empty — and the scenario checks
+the platform cannot serve the record at that moment, because otherwise the
+restore would be proving nothing and the data could be in a cache. The dump is
+restored, and the platform comes back **without being restarted**: the pool
+reconnects on its own.
+
+Two further checks, because a restore can succeed and still be wrong:
+
+- **the migration bookkeeping survived.** A restore that lost it looks healthy
+  until the next deployment reapplies a migration onto a schema that already
+  has it. `bsystem_schema_migrations_applied` must be non-zero and
+  `bsystem_schema_migrations_drifted` must be zero — the second is the only
+  series that can see a restored database reporting the right level while
+  holding a different schema.
+- **no credential is in the dump.** The platform holds upstream API keys in its
+  environment and must never write one into a row. A dump is copied to laptops,
+  attached to tickets and kept for years, so it is the worst possible place for
+  one to appear, and this is the only check that would notice if a future
+  change started storing them.
+
+The dump never leaves the job: it is not uploaded as an artefact, and the stack
+is destroyed with its volumes. A database backup is the one artefact nobody
+should be able to download from a CI run.
+
+### What that still does not prove
+
+The CI run uses an **ephemeral** database with fixture data, test-only
+credentials and no volume of any size. It proves the procedure is sound — that
+a dump of this platform restores into an empty PostgreSQL and is accepted by
+the running Core, with identifiers intact. It proves nothing about:
+
+- a backup taken from a **real** deployment, at real size, with real timings;
+- the backup **target**: where dumps go, whether they are encrypted, whether
+  they can be read back from wherever they were written;
+- authentik's database, which the E2E stack replaces with a mock;
+- the restore **window** — how long a real restore takes, which is the number
+  an incident actually needs.
+
+Those are the acceptance below, and they need the real thing.
+
 ## What this runbook does not do
 
 - It configures no external backup target, no schedule and no retention
@@ -169,7 +229,8 @@ of a broken state.
   RBAC — treat it as CONFIDENTIAL and encrypt it at rest.
 - It does not cover restoring a source system. EspoCRM, Redmine and Outline are
   authoritative and are backed up by whoever operates them.
-- It has not been executed against a real stage deployment. The commands are
-  standard PostgreSQL operations and the ordering is derived from how this
-  platform starts, but the first real run is part of the acceptance, not a
-  formality after it.
+- It has not been executed against a real stage deployment. The procedure is
+  executed on every CI run against an ephemeral stack (see above), which is
+  what makes it a tested procedure rather than a described one — but the first
+  run against real data, on real hardware, with a real backup target, is part
+  of the acceptance and not a formality after it.
