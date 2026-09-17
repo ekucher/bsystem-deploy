@@ -260,7 +260,7 @@ fi
 
 # --- check-identity-groups.py ------------------------------------------------
 #
-# The checker compares three lists of BSYSTEM group names. A checker that
+# The checker compares four lists of BSYSTEM group names. A checker that
 # silently matches nothing would report agreement between two empty sets, which
 # is the failure it exists to prevent — and the first draft did exactly that in
 # reverse, capturing "name: BSYSTEM-Admins" instead of the group, so every name
@@ -271,7 +271,7 @@ check "$?" "0" "the group names agree as committed"
 
 GROUPS_WORK="$WORK/groups"
 mkdir -p "$GROUPS_WORK/scripts" "$GROUPS_WORK/authentik/blueprints" \
-         "$GROUPS_WORK/mocks/cmd/mock-identity"
+         "$GROUPS_WORK/mocks/cmd/mock-identity" "$GROUPS_WORK/docs"
 cp scripts/check-identity-groups.py "$GROUPS_WORK/scripts/"
 
 write_group_fixtures() {
@@ -279,6 +279,10 @@ write_group_fixtures() {
     > "$GROUPS_WORK/authentik/blueprints/bsystem-groups.yaml"
   printf 'package main\nvar x = Principal{Groups: []string{"%s"}}\n' "$2" \
     > "$GROUPS_WORK/mocks/cmd/mock-identity/principals.go"
+  # The setup document's bullet list is the fourth place a group name is
+  # written, and the one an operator reads when verifying the deployment.
+  printf '## 2. Verify BSYSTEM groups\n\n- `%s`\n' "${3:-$1}" \
+    > "$GROUPS_WORK/docs/AUTHENTIK-OIDC.md"
 }
 
 write_group_fixtures "BSYSTEM-Admins" "BSYSTEM-Admins"
@@ -294,6 +298,20 @@ if contains "$group_output" "BSYSTEM-Admin "; then
 else
   bad "the mismatch does not name the group cleanly: $group_output"
 fi
+
+# A group the blueprint creates and the setup document omits is one the
+# operator is never told to look for, so a deployment missing it passes the
+# verification step it exists for.
+write_group_fixtures "BSYSTEM-Admins" "BSYSTEM-Admins" "BSYSTEM-Managers"
+group_output="$(cd "$GROUPS_WORK" && ./scripts/check-identity-groups.py 2>&1)"
+check "$?" "1" "a group the setup document omits is caught"
+if contains "$group_output" "the setup document"; then
+  ok "the omission names the setup document as the list that disagrees"
+else
+  bad "the omission does not name the setup document: $group_output"
+fi
+
+write_group_fixtures "BSYSTEM-Admins" "BSYSTEM-Admins"
 
 # A blueprint with no groups must not read as "everything agrees".
 printf 'entries: []\n' > "$GROUPS_WORK/authentik/blueprints/bsystem-groups.yaml"

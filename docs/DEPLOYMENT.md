@@ -81,7 +81,7 @@ sending prompts somewhere unintended.
 
 1. **authentik first.** Groups (`BSYSTEM-Admins` and the rest) must exist
    before anyone signs in, because the platform maps groups to roles and a
-   user in no known group resolves to no permissions at all. All nine are
+   user in no known group resolves to no permissions at all. All eight are
    created by the blueprint mounted at `authentik/blueprints/bsystem-groups.yaml`,
    so this is a thing to verify rather than to do by hand. See
    [AUTHENTIK-OIDC.md](AUTHENTIK-OIDC.md).
