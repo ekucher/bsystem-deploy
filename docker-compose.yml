@@ -97,7 +97,11 @@ services:
       - no-new-privileges:true
     # See authentik-server: privileges are left to the image's own entrypoint.
     command: worker
-    environment: *authentik_env
+    environment:
+      <<: *authentik_env
+      # Used only by the least-privilege user-administration blueprint. The
+      # authentik server container does not receive this token.
+      BSYSTEM_AUTHENTIK_ADMIN_TOKEN: ${BSYSTEM_AUTHENTIK_ADMIN_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -121,6 +125,9 @@ services:
       DATABASE_URL: postgres://bsystem:${POSTGRES_PASSWORD}@postgres:5432/bsystem_integration?sslmode=disable
       NATS_URL: nats://nats:4222
       AUTHENTIK_USERINFO_URL: http://authentik-server:9000/application/o/userinfo/
+      # Server-side only. The HUB never receives this credential.
+      AUTHENTIK_ADMIN_URL: http://authentik-server:9000
+      AUTHENTIK_ADMIN_TOKEN: ${BSYSTEM_AUTHENTIK_ADMIN_TOKEN:-}
       ESPOCRM_URL: ${ESPOCRM_URL:-}
       ESPOCRM_API_KEY: ${ESPOCRM_API_KEY:-}
       REDMINE_URL: ${REDMINE_URL:-}
