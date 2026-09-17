@@ -1,0 +1,260 @@
+# The release artifact pipeline.
+#
+# One property, and everything here serves it: **the artifact that was tested
+# is the artifact that was scanned and the artifact that is described.**
+#
+# Without it, "we scanned the image" means "we scanned an image built from the
+# same source, probably". The two differ whenever a base image moved or a
+# dependency resolved differently between one job and the next, and a pipeline
+# that rebuilds at each stage cannot tell the difference — so the evidence
+# describes something that was never run.
+#
+# So each product image is built once, its identity recorded, and every later
+# stage refers to that identity. The last step re-reads them all and fails if
+# any moved.
+#
+# Nothing is pushed anywhere. Publishing needs a registry credential, which is
+# an owner decision; the promotion flow is documented in docs/RELEASE.md and
+# performed by a person.
+name: Release artifacts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  artifacts:
+    name: Immutable release artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout deployment repository
+        uses: actions/checkout@v7
+
+      # The same branch-matching the E2E job uses, for the same reason: a
+      # change spanning repositories is validated as a set before either side
+      # merges.
+      - name: Resolve the product branches
+        id: refs
+        run: |
+          resolve() {
+            local remote="$1" ref="${{ github.head_ref || github.ref_name }}"
+            if git ls-remote --exit-code --heads "$remote" "$ref" >/dev/null 2>&1; then
+              printf '%s' "$ref"
+            else
+              printf 'main'
+            fi
+          }
+          core="$(resolve https://github.com/ekucher/bsystem-integration-core)"
+          hub="$(resolve https://github.com/ekucher/bsystem-hub)"
+          echo "core=$core" >> "$GITHUB_OUTPUT"
+          echo "hub=$hub" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Release candidate inputs"
+            echo "- Integration Core: \`$core\`"
+            echo "- HUB: \`$hub\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout Integration Core
+        uses: actions/checkout@v7
+        with:
+          repository: ekucher/bsystem-integration-core
+          ref: ${{ steps.refs.outputs.core }}
+          path: bsystem-integration-core
+
+      - name: Checkout HUB
+        uses: actions/checkout@v7
+        with:
+          repository: ekucher/bsystem-hub
+          ref: ${{ steps.refs.outputs.hub }}
+          path: bsystem-hub
+
+      # Tagged by the commit they were built from, which is the only name that
+      # cannot be reused for something else later.
+      - name: Build the release images
+        id: build
+        run: |
+          core_sha="$(git -C bsystem-integration-core rev-parse HEAD)"
+          hub_sha="$(git -C bsystem-hub rev-parse HEAD)"
+          echo "core_image=bsystem-integration-core:$core_sha" >> "$GITHUB_OUTPUT"
+          echo "hub_image=bsystem-hub:$hub_sha" >> "$GITHUB_OUTPUT"
+          docker build -t "bsystem-integration-core:$core_sha" bsystem-integration-core
+          # The HUB bakes its OIDC configuration in at build time, so a
+          # release image is specific to the authentik it was built for. These
+          # are RFC 2606 reserved placeholders: this pipeline proves the image
+          # builds, scans and is described, and a deployable HUB image is
+          # built by the owner with their own issuer. That limitation is in
+          # docs/RELEASE.md rather than implied by a placeholder nobody reads.
+          docker build \
+            --build-arg VITE_OIDC_AUTHORITY=https://authentik.example/application/o/bsystem-hub/ \
+            --build-arg VITE_OIDC_CLIENT_ID=release-build-placeholder \
+            -t "bsystem-hub:$hub_sha" bsystem-hub
+
+      # From here on, every stage refers to these identities.
+      - name: Record what was built
+        run: |
+          python3 scripts/image-digests.py record built.json \
+            "integration-core=${{ steps.build.outputs.core_image }}" \
+            "hub=${{ steps.build.outputs.hub_image }}"
+
+      # The exact image, run. Compose is given no --build, so it uses what is
+      # there rather than making another one.
+      - name: Start the E2E stack from the built image
+        env:
+          CORE_IMAGE: ${{ steps.build.outputs.core_image }}
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: |
+          docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.images.yml \
+            up -d --wait --wait-timeout 300
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+          cache: false
+
+      - name: Run the E2E scenarios against it
+        working-directory: e2e
+        env:
+          E2E_REQUIRED: "1"
+          E2E_BASE_URL: http://127.0.0.1:8080
+          E2E_PARTIAL_BASE_URL: http://127.0.0.1:8081
+          E2E_IDENTITY_URL: http://127.0.0.1:9000
+          E2E_ESPOCRM_URL: http://127.0.0.1:8090
+          E2E_REDMINE_URL: http://127.0.0.1:8091
+          E2E_OUTLINE_URL: http://127.0.0.1:8092
+          E2E_NATS_ADDR: 127.0.0.1:4222
+          E2E_LIFECYCLE: "1"
+          E2E_COMPOSE_FILE: ../docker-compose.e2e.yml
+          CORE_IMAGE: ${{ steps.build.outputs.core_image }}
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: go test -count=1 -timeout 25m ./...
+
+      - name: Collect stack logs on failure
+        if: failure()
+        env:
+          CORE_IMAGE: ${{ steps.build.outputs.core_image }}
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.images.yml logs --no-color --tail=300
+
+      - name: Tear down the E2E stack
+        if: always()
+        env:
+          CORE_IMAGE: ${{ steps.build.outputs.core_image }}
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml -f docker-compose.e2e.images.yml down -v --remove-orphans
+
+      # Scanned by image reference, not rebuilt from a Dockerfile. This is the
+      # step the whole pipeline is arranged around.
+      - name: Scan the Integration Core image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.build.outputs.core_image }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: Scan the HUB image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.build.outputs.hub_image }}
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          ignore-unfixed: true
+
+      - name: SBOM for the Integration Core image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.build.outputs.core_image }}
+          format: cyclonedx
+          output: sbom-integration-core.cyclonedx.json
+
+      - name: SBOM for the HUB image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.build.outputs.hub_image }}
+          format: cyclonedx
+          output: sbom-hub.cyclonedx.json
+
+      # Provenance without signing. A signature needs a key, which is an owner
+      # decision; a statement of where a thing came from does not, and it is
+      # the half that answers "what produced this" during an incident.
+      - name: Record provenance
+        run: |
+          python3 - <<'PY' > provenance.json
+          import json, os, subprocess
+          with open("built.json", encoding="utf-8") as handle:
+              images = json.load(handle)
+          def head(path):
+              return subprocess.run(["git", "-C", path, "rev-parse", "HEAD"],
+                                    capture_output=True, text=True).stdout.strip()
+          print(json.dumps({
+              "built_by": {
+                  "workflow": os.environ.get("GITHUB_WORKFLOW", ""),
+                  "repository": os.environ.get("GITHUB_REPOSITORY", ""),
+                  "run_id": os.environ.get("GITHUB_RUN_ID", ""),
+                  "run_attempt": os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+                  "run_url": f"{os.environ.get('GITHUB_SERVER_URL','')}/{os.environ.get('GITHUB_REPOSITORY','')}/actions/runs/{os.environ.get('GITHUB_RUN_ID','')}",
+              },
+              "sources": {
+                  "bsystem-deploy": head("."),
+                  "bsystem-integration-core": head("bsystem-integration-core"),
+                  "bsystem-hub": head("bsystem-hub"),
+              },
+              "images": images,
+              "signed": False,
+              "note": "Unsigned. Signing requires a key the owner has not configured; this records origin, not authenticity.",
+          }, indent=2, sort_keys=True))
+          PY
+
+      - name: Generate the release manifest
+        env:
+          CORE_DIR: bsystem-integration-core
+          HUB_DIR: bsystem-hub
+          RELEASE_IMAGES: built.json
+        run: bash scripts/release-manifest.sh > release-manifest.json
+
+      # The last thing, and the point of the first thing. If any image moved
+      # between being tested, being scanned and being described, everything
+      # above is evidence about something else.
+      - name: Verify nothing was rebuilt underneath the evidence
+        run: python3 scripts/image-digests.py verify built.json
+
+      - name: Check the manifest describes the images that were scanned
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          with open("built.json", encoding="utf-8") as handle:
+              built = json.load(handle)
+          with open("release-manifest.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)
+          described = manifest.get("images")
+          if described != built:
+              print("the release manifest describes different images from the ones that were built and scanned")
+              print(f"  built:     {json.dumps(built, sort_keys=True)}")
+              print(f"  described: {json.dumps(described, sort_keys=True)}")
+              sys.exit(1)
+          print(f"the manifest describes the {len(built)} image(s) that were tested and scanned")
+          PY
+
+      - name: Publish the release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: |
+            built.json
+            provenance.json
+            release-manifest.json
+            sbom-integration-core.cyclonedx.json
+            sbom-hub.cyclonedx.json
+          retention-days: 90

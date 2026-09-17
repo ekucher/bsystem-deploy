@@ -356,3 +356,81 @@ jobs:
         env:
           INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
         run: docker compose -f docker-compose.e2e.yml down -v --remove-orphans
+
+  # Backup and restore, on a stack of its own.
+  #
+  # The scenario destroys the database. Running it beside the others would turn
+  # one failure here into a wall of failures everywhere, and the one that
+  # mattered would be lost in it — so it gets its own runner, its own stack and
+  # its own job, and the rest of the suite never sees a dropped database.
+  backup:
+    name: Backup and restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout deployment repository
+        uses: actions/checkout@v7
+
+      - name: Resolve the Integration Core branch
+        id: core-ref
+        run: |
+          remote=https://github.com/ekucher/bsystem-integration-core
+          ref="${{ github.head_ref || github.ref_name }}"
+          if ! git ls-remote --exit-code --heads "$remote" "$ref" >/dev/null 2>&1; then
+            ref=main
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Integration Core
+        uses: actions/checkout@v7
+        with:
+          repository: ekucher/bsystem-integration-core
+          ref: ${{ steps.core-ref.outputs.ref }}
+          path: bsystem-integration-core
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: e2e/go.mod
+          cache: false
+
+      - name: Start the E2E stack
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml up -d --build --wait --wait-timeout 300
+
+      - name: Take a backup, destroy the database, and restore it
+        working-directory: e2e
+        env:
+          E2E_REQUIRED: "1"
+          E2E_BASE_URL: http://127.0.0.1:8080
+          E2E_PARTIAL_BASE_URL: http://127.0.0.1:8081
+          E2E_IDENTITY_URL: http://127.0.0.1:9000
+          E2E_ESPOCRM_URL: http://127.0.0.1:8090
+          E2E_REDMINE_URL: http://127.0.0.1:8091
+          E2E_OUTLINE_URL: http://127.0.0.1:8092
+          E2E_NATS_ADDR: 127.0.0.1:4222
+          E2E_LIFECYCLE: "1"
+          E2E_COMPOSE_FILE: ../docker-compose.e2e.yml
+          # The job exists to run this one scenario, so a run that skipped it
+          # and exited zero would be the worst possible outcome: a green check
+          # that restored nothing.
+          E2E_BACKUP: "1"
+          E2E_BACKUP_REQUIRED: "1"
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: go test -v -count=1 -timeout 15m -run 'Backup' ./...
+
+      - name: Collect stack logs on failure
+        if: failure()
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml logs --no-color --tail=300
+
+      # The dump never leaves the job. A database backup is the one artefact
+      # nobody should be able to download from a CI run, so it is not uploaded
+      # and the stack it came from is destroyed with its volumes.
+      - name: Tear down the E2E stack
+        if: always()
+        env:
+          INTEGRATION_CORE_CONTEXT: ./bsystem-integration-core
+        run: docker compose -f docker-compose.e2e.yml down -v --remove-orphans

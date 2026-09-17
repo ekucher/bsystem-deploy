@@ -97,6 +97,23 @@ Follows from step 6 and cannot be derived from it automatically.
 `docs/BACKUP-RESTORE.md` has the procedure. Accepting it means performing a
 restore, not reading about one.
 
+### 9. A container registry, and the HUB's own build
+
+**Blocks:** deploying the images CI has tested, scanned and described.
+
+The release pipeline builds each product image once, validates the exact image
+it built, scans it, and publishes a manifest and SBOMs bound to its identity —
+and pushes nothing. Pushing needs a registry credential.
+
+The HUB needs one more thing: it bakes its OIDC issuer and client id in at
+build time, so the image CI builds carries reserved placeholders and is not
+deployable. A deployable HUB image is built with the deployment's own issuer,
+and its identity will differ from the manifest's. Record the new one.
+
+`docs/RELEASE.md` has the promotion steps and the rule that matters: never
+retag an existing tag onto a new image, because the tag is how the manifest is
+joined to the thing running.
+
 ## Decisions, not credentials
 
 These need an owner's judgement rather than access.

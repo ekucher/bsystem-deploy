@@ -91,9 +91,26 @@ design_system_version() {
   grep -m1 '"version"' "$file" | sed 's/.*"version"[[:space:]]*:[[:space:]]*"//; s/".*//' || printf 'unknown'
 }
 
+# The images this release is made of, as recorded at the moment they were
+# built. Read from a file rather than inspected here, so the manifest describes
+# the artifact that was tested and scanned rather than whatever happens to be
+# tagged when the manifest is generated — which is the same thing only if
+# nothing rebuilt in between, and "only if" is what the pipeline is for. See
+# scripts/image-digests.py.
+images_object() {
+  local file="${RELEASE_IMAGES:-}"
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
+    printf 'null'
+    return
+  fi
+  # Emitted verbatim: it is already JSON, written by the recorder.
+  cat "$file"
+}
+
 cat <<JSON
 {
   "generated_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "images": $(images_object),
   "repositories": {
 $(repo_object "bsystem-deploy" "."),
 $(repo_object "bsystem-integration-core" "$CORE_DIR"),
@@ -110,6 +127,13 @@ $(repo_object "bsystem-design-system" "$DS_DIR")
   },
   "design_system": {
     "version": "$(design_system_version)"
+  },
+  "compatibility": {
+    "api_versions": ["/api/v1", "/api/service/v1"],
+    "schema_supports_upgrade_from": "any earlier level; there is no downward migration",
+    "older_core_against_this_schema": "unsupported",
+    "hub_core_declaration": "validated pair, not a version range: the commits above were verified together",
+    "policy": "bsystem-integration-core/docs/VERSIONING.md"
   }
 }
 JSON

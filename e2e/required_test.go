@@ -62,6 +62,12 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
 		os.Exit(1)
 	}
+	// And once more for the backup scenario, which runs in a job of its own
+	// because it destroys the database. See backup_test.go.
+	if err := checkBackupRequired(os.Getenv("E2E_BACKUP"), os.Getenv("E2E_BACKUP_REQUIRED")); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: %v\n", err)
+		os.Exit(1)
+	}
 	os.Exit(m.Run())
 }
 

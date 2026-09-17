@@ -2186,19 +2186,72 @@ Depends on: P28-P32
 Goal: ensure the artifact scanned, described and promoted is the exact artifact
 that CI tested, not a later rebuild from the same source.
 
-- [ ] define releasable artifacts for Integration Core and HUB; keep mocks/test
+- [x] define releasable artifacts for Integration Core and HUB; keep mocks/test
       images separate from product artifacts
-- [ ] build each release image once per commit
-- [ ] tag by immutable commit SHA and record image digest
-- [ ] use the exact built image for runtime/E2E validation where practical
-- [ ] scan that exact image with Trivy rather than a rebuild
-- [ ] generate SBOM from that exact image and bind it to its digest
-- [ ] generate provenance/attestation with repository, commit, workflow run and
+      — the two product images are release artifacts; the mocks and the two Go
+      harnesses are not, and the E2E override deliberately leaves the mocks
+      building from source. A manifest that described a test fixture would be
+      describing something no deployment runs
+- [x] build each release image once per commit
+- [x] tag by immutable commit SHA and record image digest
+      — a commit SHA is the only name that cannot later be reused for
+      something else. A local image has no registry digest until it is pushed,
+      so the identity recorded is the **image ID**: the sha256 of its
+      configuration, which covers its layers, is immutable for a given build,
+      and changes if anything about the image changes
+- [x] use the exact built image for runtime/E2E validation where practical
+      — `docker-compose.e2e.images.yml`, and the absence of `--build` is the
+      whole mechanism: with an `image:` set and no `--build`, Compose uses what
+      is there rather than making another one
+- [x] scan that exact image with Trivy rather than a rebuild
+- [x] generate SBOM from that exact image and bind it to its digest
+- [x] generate provenance/attestation with repository, commit, workflow run and
       digest; do not add signing credentials unless owner-configured
-- [ ] publish release manifest as CI artifact containing image digests, schema
+      — unsigned, and `provenance.json` says so in the document itself rather
+      than only in the documentation: it records origin, not authenticity. A
+      signature needs a key the owner has not configured
+- [x] publish release manifest as CI artifact containing image digests, schema
       level, OpenAPI hash, HUB/Core commits and compatibility manifest
-- [ ] verify a digest mismatch between tested/scanned/reported artifacts fails CI
-- [ ] document promotion flow without performing a production deployment
+      — `release-manifest.sh` gained an `images` block, read from the file
+      written at build time rather than inspected when the manifest is
+      generated. Those are the same thing only if nothing rebuilt in between,
+      and "only if" is what the pipeline exists to remove
+- [x] verify a digest mismatch between tested/scanned/reported artifacts fails
+      CI
+      — two checks, not one. The identities are re-read at the end and
+      compared with what was built, and the generated manifest is compared
+      with the same file, so a manifest that described a different image would
+      fail even if nothing had been rebuilt
+- [x] document promotion flow without performing a production deployment
+      — `docs/RELEASE.md`. Steps 4 to 6 need a registry credential and a
+      deployment target and are `[!]` below
+
+Findings:
+
+- a check that only ever sees matching identities has never been shown to
+  detect a mismatch, so `scripts/image-digests.py` is exercised from both
+  directions with the readings supplied from files — reproducing the failure
+  with real images would mean corrupting one. An unchanged pair verifies, a
+  rebuilt image is caught **by name**, a vanished one is caught, and a
+  manifest recording no image at all is refused rather than trivially verified
+- **the first run of the release pipeline found a real vulnerability**, which
+  is the argument for the pipeline existing. The Security workflow scans one
+  mock image, on the reasoning that the four mocks share a Dockerfile — and
+  nothing had ever scanned the image the platform actually ships. The first
+  scan of it found CVE-2026-14456 in `libssl3` and `libcrypto3`, fixed
+  upstream and still waiting for the `alpine:3.22` tag to move. Both product
+  Dockerfiles now `apk upgrade` rather than only `apk add`: the packages that
+  carry vulnerabilities in an image like this are the base image's own, and
+  `apk add` does not touch them
+- **the HUB image this pipeline builds is not deployable.** The HUB bakes its
+  OIDC issuer and client id in at build time, so a release image is specific
+  to the authentik it was built for. The pipeline proves the image builds,
+  scans clean and is described; a deployable one is built by the owner with
+  their own issuer, and its identity will differ from the manifest's. That is
+  recorded rather than papered over with a placeholder nobody reads
+- [!] pushing the images to a registry needs a registry credential, and
+      deploying them needs a target. Both owner-only; see `docs/RELEASE.md`
+      and `docs/HANDOFF.md`
 
 Definition of Done:
 - one immutable digest identifies what was tested, scanned and described;
@@ -2215,20 +2268,73 @@ Depends on: P33
 Goal: turn existing cross-repo compatibility checks into an explicit release
 contract.
 
-- [ ] define versioning policy for Integration Core HTTP API
-- [ ] define what constitutes additive vs breaking API change
-- [ ] define OpenAPI version/source-of-truth policy
-- [ ] define schema compatibility level and minimum/maximum supported migration
-      direction for a release
-- [ ] define HUB ↔ Core compatibility declaration without inventing a consumer
+- [x] define versioning policy for Integration Core HTTP API
+- [x] define what constitutes additive vs breaking API change
+      — both in `bsystem-integration-core/docs/VERSIONING.md`, with the part
+      that usually goes unsaid said: the `error` text is prose and may change
+      freely, the `code` is what clients switch on and may not. And
+      **tightening authorization is not a breaking change** — a caller who
+      could reach something they should not, and now cannot, is a defect being
+      fixed
+- [x] define OpenAPI version/source-of-truth policy
+      — the document is the source of truth and the implementation is tested
+      against it, rather than the document being generated from the code. The
+      direction is the point: a document generated from the code cannot
+      disagree with the code, which makes it useless as a check
+- [x] define schema compatibility level and minimum/maximum supported
+      migration direction for a release
+      — a release supports the level it embeds and every earlier one it can
+      migrate forward from, which is executed by
+      `TestUpgradeWorksFromEveryHistoricalSchemaLevel` rather than asserted.
+      There is no downward migration, and a newer database under an older Core
+      is **unsupported** — it usually works, because the schema is additive,
+      and "usually" is not a support statement
+- [x] define HUB ↔ Core compatibility declaration without inventing a consumer
       version matrix that is not tested
-- [ ] expose build/release version metadata consistently through metrics and/or
-      a safe version endpoint
-- [ ] make release manifest record compatibility requirements
-- [ ] add CI fixtures proving an additive API change passes and an intentionally
-      breaking provider change fails the consumer gate
-- [ ] document emergency rollback constraints when a release includes an
+      — a **validated pair**, not a range. "These two commits were verified
+      together" is true and checkable; "this HUB works with Core 1.2 through
+      1.7" is a matrix nothing has tried
+- [x] expose build/release version metadata consistently through metrics
+      and/or a safe version endpoint
+      — already exposed, and left as it is deliberately. `bsystem_build_info`
+      carries version, commit, build time and embedded schema level;
+      `bsystem_schema_migrations_applied` carries the level the database is
+      actually at, and the two disagree exactly when a database is behind its
+      code. No endpoint was added to report the OpenAPI hash: the commit label
+      names the exact document, and embedding a second copy in the binary
+      creates two places that can disagree
+- [x] make release manifest record compatibility requirements
+      — a `compatibility` block naming both API versions, the migration
+      direction, the unsupported combination and where the policy lives
+- [x] add CI fixtures proving an additive API change passes and an
+      intentionally breaking provider change fails the consumer gate
+      — `bsystem-hub/scripts/tests/contract-gate.test.sh`, run in the HUB's
+      contract job. The gate had only ever been run against a specification
+      and a source tree that agree, so it had never been shown to catch a
+      change that breaks them
+- [x] document emergency rollback constraints when a release includes an
       irreversible schema change; do not add an irreversible migration here
+      — a release with only additive migrations rolls back by redeploying the
+      previous image. One with a destructive migration does not: restoring the
+      older code against a database that has had a column dropped means
+      restoring the database too, from a backup taken before the migration,
+      which loses everything written since. So a destructive change is a
+      two-release change, never one. **No irreversible migration exists today
+      and none was added to write that section**
+
+Findings:
+
+- the policy says, for each rule, whether a machine checks it. A compatibility
+  policy nothing enforces is a description of intentions
+- and one gap is recorded rather than implied by the absence of a check:
+  **field-level additive-versus-breaking is not checked.** Nothing compares
+  this release's schemas against the previous release's, so removing a
+  response field passes CI. The path gate covers paths, not fields and not
+  error codes
+- the consumer gate's own test includes the two vacuity cases, because a gate
+  that passes when it compared nothing is the failure it exists to prevent: a
+  consumer requesting no path, and a specification with one path in it, are
+  both refused
 
 Definition of Done:
 - a release states which Core/HUB/schema/OpenAPI combination it represents;
@@ -2243,21 +2349,81 @@ Depends on: P33, P34
 Goal: prove restoreability in an ephemeral environment rather than only maintain
 a runbook.
 
-- [ ] create deterministic fixture data covering identities, service identities,
-      Global IDs/mappings, RBAC/scopes, audit, notifications, operations and
-      support records
-- [ ] take a PostgreSQL logical backup in CI/E2E using test-only credentials
-- [ ] destroy/recreate the ephemeral database
-- [ ] restore the backup
-- [ ] start the application against the restored database
-- [ ] verify schema migration history/checksums remain valid
-- [ ] verify representative Global IDs are unchanged
-- [ ] verify RBAC/scopes, notifications, support and audit data survive
-- [ ] verify secrets are not written into backup artifacts by the application
+- [x] create deterministic fixture data covering identities, service
+      identities, Global IDs/mappings, RBAC/scopes, audit, notifications,
+      operations and support records
+      — written **through the platform's own API**, not as SQL. What is backed
+      up is then what the platform actually produces rather than rows a test
+      invented, and a restore that loses a shape the platform writes but a
+      fixture did not would still be caught
+- [x] take a PostgreSQL logical backup in CI/E2E using test-only credentials
+      — `pg_dump` inside the database container, which is on an internal
+      network and deliberately not published: a scenario that needed the port
+      opened would have weakened the isolation it is testing against
+- [x] destroy/recreate the ephemeral database
+      — and the scenario checks the platform **cannot** serve the record at
+      that moment. Without that, the restore below would prove nothing: the
+      data could be in a cache
+- [x] restore the backup
+- [x] start the application against the restored database
+      — it was never stopped. The pool reconnects on its own, which is the
+      better contract: a restore that needed the process restarted to be
+      usable is a different and worse one
+- [x] verify schema migration history/checksums remain valid
+      — applied is non-zero and **drifted is zero**. A restore that lost the
+      bookkeeping looks healthy until the next deployment reapplies a
+      migration onto a schema that already has it, and drift is the only
+      series that can see a restored database reporting the right level while
+      holding a different schema
+- [x] verify representative Global IDs are unchanged
+      — the assertion the scenario exists for. A Global ID that changed across
+      a restore is a platform that has silently renamed every customer's
+      records. The **counter** is checked too: one restored to zero would mint
+      an identifier that already belongs to something else, which is worse
+      than losing the row
+- [x] verify RBAC/scopes, notifications, support and audit data survive
+      — read back through the API rather than counted in the tables. A row
+      that survived and that the platform can no longer serve is not a
+      successful restore, and comparing tables to tables would not notice
+- [x] verify secrets are not written into backup artifacts by the application
       layer; do not publish DB backup artifacts outside the CI job
-- [ ] exercise restore followed by upgrade to current schema when practical
-- [ ] document what this proves and what still requires real infrastructure
+      — the dump is searched for every upstream API key and the database
+      password. A dump is copied to laptops, attached to tickets and kept for
+      years, so it is the worst possible place for a credential to appear, and
+      this is the only check that would notice if a future change started
+      storing them. The dump is never uploaded as an artefact and the stack is
+      destroyed with its volumes
+- [x] exercise restore followed by upgrade to current schema when practical
+      — partially, and the limit is recorded rather than glossed. The restored
+      database is at the current level, so what this executes is that a Core
+      accepts it and reports no drift. A restore from an **older** level
+      followed by an upgrade is covered one layer down, by Core's
+      `TestUpgradeWorksFromEveryHistoricalSchemaLevel`
+- [x] document what this proves and what still requires real infrastructure
       backup acceptance
+      — `docs/BACKUP-RESTORE.md` gained both halves. What it proves: the
+      procedure is sound. What it does not: a backup taken from a real
+      deployment at real size, the backup **target** and whether anything can
+      be read back from it, authentik's database (which the E2E stack replaces
+      with a mock), and the restore **window** — how long a real restore takes,
+      which is the number an incident actually needs
+
+Findings:
+
+- the scenario runs in its own CI job with its own stack. Dropping the database
+  underneath the other scenarios would turn one failure here into a wall of
+  failures everywhere, and the one that mattered would be lost in it
+- it carries the same no-silent-skip guard as the other two: the job exists to
+  run one scenario, so a run that skipped it and exited zero would be the worst
+  possible outcome — a green check that restored nothing
+- the first CI run failed on the audit comparison, and the test was what was
+  wrong. Reading a Global ID is itself an audited action, so the read that
+  takes the "before" snapshot writes a row and the read that takes the "after"
+  one writes another: a count comparison was measuring its own observation and
+  was off by exactly one, every time. It compares the entries by id, action,
+  resource and request id now, and asserts that every entry which existed
+  before the backup is still there. New entries after a restore are expected —
+  the platform is still being used
 
 Definition of Done:
 - CI proves a real database backup can be restored into a fresh PostgreSQL and
