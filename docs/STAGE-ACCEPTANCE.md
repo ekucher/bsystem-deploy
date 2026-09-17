@@ -42,6 +42,18 @@ degraded` and the platform keeps serving. Events are not queued while it is
 absent; they are dropped. That is worth knowing before an acceptance concludes
 that eventing works.
 
+PostgreSQL is the opposite: while it is unreachable `/readyz` answers `503`
+with `database: error` and nothing else — no host, port, user, database name or
+driver error. Both statements are now executed rather than asserted: the E2E
+suite stops each dependency in turn and reads the answer. See
+`docs/E2E-ENVIRONMENT.md`.
+
+**Startup is fail-fast.** A Core that cannot open its database at startup exits
+instead of serving, and recovery is the restart policy's. Deploy the Core with
+a restart policy (the E2E and stage Compose files use `restart:
+unless-stopped`); without one, a database that is briefly unavailable during a
+deployment leaves a stopped container behind rather than a core that waits.
+
 ## Environment variables
 
 Classification:

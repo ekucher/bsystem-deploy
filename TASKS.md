@@ -1418,18 +1418,16 @@ Add deterministic E2E scenarios for:
       without Outline" was an assumption about a configuration no stack had
       ever brought up, and it is the configuration a stage acceptance is most
       likely to meet
-- [ ] NATS unavailable and recovery
-      — not covered, and not coverable from the harness as it stands. The
-      scenarios talk HTTP and the NATS wire protocol to a running stack; they
-      cannot stop and start a container. Proving *recovery* in particular needs
-      container lifecycle control in the E2E job rather than a new assertion.
-      Readiness already distinguishes it (`nats: degraded` without making the
-      platform unready), so what is missing is the demonstration, not the
-      behavior
-- [ ] PostgreSQL unavailable during readiness/startup where practical
-      — same limit, and "where practical" is doing real work in that line.
-      Readiness answers 503 with `database: error` when the pool cannot ping,
-      but showing it means taking PostgreSQL away from a running stack
+- [x] NATS unavailable and recovery
+      — closed by P28. The limit recorded here was the harness's, not the
+      platform's, and it was the wrong limit: the test binary runs on the CI
+      runner next to the Docker daemon, so it could always have driven
+      `docker compose` itself. See
+      `TestTheCoreKeepsServingWithoutTheEventBusAndRecoversWhenItReturns`
+- [x] PostgreSQL unavailable during readiness/startup where practical
+      — closed by P28, both halves of it. See
+      `TestTheCoreBecomesUnreadyWithoutItsDatabaseAndDescribesNothing` and
+      `TestACoreStartingWithoutADatabaseNeverServesAndComesUpWhenTheDatabaseReturns`
 - [x] concurrent reads of the same newly discovered source records
       — `TestConcurrentAllocationsOfOneNewRecordAgreeOnOneGlobalID`. Eight
       callers released together against a source record named after the run.
@@ -1796,22 +1794,68 @@ Depends on: P23
 Goal: close the two remaining E2E resilience gaps by controlling dependency
 lifecycle from CI rather than only observing a fully running stack.
 
-- [ ] add a CI/harness control surface that can stop/start only designated E2E
+- [x] add a CI/harness control surface that can stop/start only designated E2E
       dependency containers without giving the application containers Docker
       socket access
-- [ ] stop NATS while Integration Core remains running
-- [ ] verify `/readyz` reports NATS degraded exactly as designed and the Core
+      — `e2e/lifecycle.go`. The surface is outside the stack: the test binary
+      runs on the CI runner, next to the Docker daemon, and drives
+      `docker compose` itself. No container is given the socket and the compose
+      files are unchanged. P23 had recorded this as impossible from the
+      harness; that was a wrong reading of where the harness runs, not a
+      missing capability
+- [x] stop NATS while Integration Core remains running
+- [x] verify `/readyz` reports NATS degraded exactly as designed and the Core
       remains ready if that is the documented policy
-- [ ] restore NATS and verify automatic recovery without Core restart
-- [ ] stop PostgreSQL while Integration Core remains running
-- [ ] verify `/readyz` becomes non-ready and does not leak DSN, host, user or
+      — it does. `TestTheCoreKeepsServingWithoutTheEventBusAndRecoversWhenItReturns`
+      also reads three collections through the outage, because "degraded, not
+      down" is a claim about the API rather than about the probe
+- [x] restore NATS and verify automatic recovery without Core restart
+      — it reconnects on its own. The scenario compares the core container's
+      `StartedAt` across the outage, because a core the restart policy brought
+      back also ends up reporting `nats: ok` and from the outside the two are
+      the same HTTP 200
+- [x] stop PostgreSQL while Integration Core remains running
+- [x] verify `/readyz` becomes non-ready and does not leak DSN, host, user or
       driver details
-- [ ] restore PostgreSQL and verify readiness recovers without Core restart
-- [ ] exercise startup with PostgreSQL initially unavailable, where practical,
+      — it does not, and the check covers `/health` and an API error with the
+      same list, since a DSN leaking from any of them is the same disclosure.
+      The port is matched as `:5432`: a bare `5432` also occurs inside a hex
+      request id, and a check that flakes is a check that gets removed
+- [x] restore PostgreSQL and verify readiness recovers without Core restart
+      — the pool reconnects; `StartedAt` is compared for the same reason
+- [x] exercise startup with PostgreSQL initially unavailable, where practical,
       and document whether retry/restart policy or fail-fast startup is the
       intended contract
-- [ ] make lifecycle tests deterministic, bounded and impossible to silently
+      — **fail-fast**, now written down rather than inferred. `main` calls
+      `log.Fatalf` when it cannot open the database, so the process exits
+      instead of serving while unable to answer anything, and recovery belongs
+      to the restart policy. The scenario pins both ends: no window in which
+      such a core answers `/readyz` with 200, and no intervention needed once
+      PostgreSQL returns. The consequence for a deployment is now in
+      `docs/STAGE-ACCEPTANCE.md` — a Core deployed *without* a restart policy
+      leaves a stopped container behind after a database blip rather than a
+      core that waits
+- [x] make lifecycle tests deterministic, bounded and impossible to silently
       skip in `E2E_REQUIRED=1` CI
+      — every wait is bounded and reports its last observation, so a timeout
+      names what it saw instead of becoming a re-run. `E2E_LIFECYCLE` is opt-in
+      locally and mandatory in CI: with `E2E_REQUIRED` set and `E2E_LIFECYCLE`
+      empty, `TestMain` refuses to start. That is the same silent skip
+      `required_test.go` exists for, one level down — without it these
+      scenarios would skip on a runner with no Docker and the job would exit
+      zero having stopped nothing
+
+Findings:
+
+- what may be stopped is an allowlist, not an argument. The primary
+  Integration Core is deliberately absent from it: every other scenario in the
+  package asserts against that core, and a restart reaching it from a lifecycle
+  test would surface as an unrelated failure somewhere else in the suite. The
+  allowlist and the skip guard are plain functions, so they are exercised by
+  `go test ./...` on a machine with no Docker at all — a guard tested only
+  where the stack is up is tested exactly where it is least needed
+- the guards were verified by mutation: allowing every service, and allowing a
+  required run with no lifecycle control, each fail the tests that cover them
 
 Definition of Done:
 - P23's NATS and PostgreSQL outage boxes can be closed with executable evidence;
