@@ -65,6 +65,20 @@ services:
       AUTHENTIK_POSTGRESQL__NAME: authentik
       AUTHENTIK_POSTGRESQL__USER: bsystem
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
+      # First-start bootstrap, for a host with no browser.
+      #
+      # Set together, these create authentik's `akadmin` on the first start
+      # instead of leaving the unauthenticated /if/flow/initial-setup/ page
+      # waiting for somebody to reach it. Empty — the default — changes
+      # nothing: the setup flow works as before.
+      #
+      # They are read on **every** start, not only the first, so a password
+      # left here is a static administrator credential sitting in a running
+      # container's environment. Clear them once the account exists; the
+      # preflight warns while they are set. See docs/DEPLOYMENT.md.
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

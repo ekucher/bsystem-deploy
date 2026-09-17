@@ -811,6 +811,29 @@ else
   ok "an empty AUTHENTIK_USERINFO_URL is not reported, because Compose supplies it"
 fi
 
+# authentik's bootstrap credentials are read on every start, so one left behind
+# is a static administrator password nothing else would mention.
+preflight_env "AUTHENTIK_BOOTSTRAP_PASSWORD=a-password-somebody-forgot"
+pf_output="$(cd "$PF_WORK" && bash "$OLDPWD/scripts/stage-preflight.sh" 2>&1 || true)"
+if contains "$pf_output" "AUTHENTIK_BOOTSTRAP_PASSWORD"; then
+  ok "a bootstrap credential left in place is reported"
+else
+  bad "a leftover bootstrap credential was not reported: $pf_output"
+fi
+if contains "$pf_output" "a-password-somebody-forgot"; then
+  bad "the preflight printed the bootstrap password itself: $pf_output"
+else
+  ok "the report names the variable and not its value"
+fi
+
+preflight_env ""
+pf_output="$(cd "$PF_WORK" && bash "$OLDPWD/scripts/stage-preflight.sh" 2>&1 || true)"
+if contains "$pf_output" "AUTHENTIK_BOOTSTRAP"; then
+  bad "an unset bootstrap credential was reported anyway: $pf_output"
+else
+  ok "no bootstrap credential set is not reported"
+fi
+
 # --- Release artifact identity ----------------------------------------------
 #
 # The property the release pipeline exists for: the artifact that was tested is

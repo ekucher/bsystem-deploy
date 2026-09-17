@@ -81,7 +81,9 @@ sending prompts somewhere unintended.
 
 1. **authentik first.** Groups (`BSYSTEM-Admins` and the rest) must exist
    before anyone signs in, because the platform maps groups to roles and a
-   user in no known group resolves to no permissions at all. See
+   user in no known group resolves to no permissions at all. All nine are
+   created by the blueprint mounted at `authentik/blueprints/bsystem-groups.yaml`,
+   so this is a thing to verify rather than to do by hand. See
    [AUTHENTIK-OIDC.md](AUTHENTIK-OIDC.md).
 2. **Postgres.** The Integration Core runs its own migrations at startup, in
    filename order. They are additive by policy, so the previous binary can run
@@ -89,6 +91,45 @@ sending prompts somewhere unintended.
 3. **Integration Core**, then **HUB**. The HUB is a static bundle and will
    render before the platform is up; it reports the failure rather than
    showing an empty page.
+
+## A host with no browser
+
+Every published port binds loopback, so on a VM reached only over SSH there is
+nothing to open. Do not widen `BIND_ADDRESS` to fix that: `/if/flow/initial-setup/`
+is an unauthenticated page that creates the first administrator, and publishing
+it on an interface somebody else can reach is the exact failure the loopback
+default exists to prevent.
+
+Forward the ports instead. From the machine with the browser:
+
+```bash
+ssh -L 9000:127.0.0.1:9000 -L 8080:127.0.0.1:8080 -L 8081:127.0.0.1:8081 user@host
+```
+
+The tunnel lasts as long as the session. `http://127.0.0.1:9000` in your own
+browser is then authentik on the host, `8080` the Integration Core and `8081`
+the HUB. Nothing in the stack changes, and the ports stay unreachable from
+anywhere else.
+
+**"Request has been denied" on the setup page means the administrator already
+exists.** The flow is available only until the first user is created; after
+that it refuses, which reads like a permissions problem and is not one. Sign in
+at `http://127.0.0.1:9000/` instead.
+
+### Bootstrapping without the setup page
+
+`AUTHENTIK_BOOTSTRAP_EMAIL`, `AUTHENTIK_BOOTSTRAP_PASSWORD` and
+`AUTHENTIK_BOOTSTRAP_TOKEN` create `akadmin` on the first start, so the setup
+page is never served at all and the token is an API token to configure the rest
+with. All three are empty by default and change nothing when unset.
+
+They are worth it where no tunnel is possible, or where the deployment is
+scripted. The cost is real and easy to miss: **authentik reads them on every
+start, not only the first.** A password left in `.env` afterwards is a static
+administrator credential sitting in a running container's environment, where
+nothing else would mention it. Clear all three once the account exists —
+`scripts/stage-preflight.sh` warns while they are set, and names the variable
+rather than printing its value.
 
 ## Upgrading
 
