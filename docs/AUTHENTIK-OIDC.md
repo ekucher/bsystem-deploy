@@ -31,6 +31,7 @@ The mounted blueprint `authentik/blueprints/bsystem-groups.yaml` declares these 
 - `BSYSTEM-Support`
 - `BSYSTEM-DevOps`
 - `BSYSTEM-Customers`
+- `BSYSTEM-Services` — service identities (`SVC-*`), not people
 
 In authentik Admin, verify them under **Directory → Groups**. If the blueprint has not yet reconciled, check worker logs and the Blueprints page.
 
