@@ -1,0 +1,70 @@
+name: bsystem-redmine-test
+
+services:
+  redmine-postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    volumes:
+      - redmine-postgres:/var/lib/postgresql/data
+    networks:
+      - redmine-data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redmine:
+    build:
+      context: .
+      args:
+        REDMINE_OAUTH_REF: "v4.2.2"
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      REDMINE_DB_POSTGRES: "${REDMINE_DB_POSTGRES}"
+      REDMINE_DB_PORT: "${REDMINE_DB_PORT}"
+      REDMINE_DB_USERNAME: "${REDMINE_DB_USERNAME}"
+      REDMINE_DB_PASSWORD: "${REDMINE_DB_PASSWORD}"
+      REDMINE_DB_DATABASE: "${REDMINE_DB_DATABASE}"
+      REDMINE_SECRET_KEY_BASE: "${REDMINE_SECRET_KEY_BASE}"
+      BSYSTEM_OIDC_CLIENT_SECRET: "${BSYSTEM_OIDC_CLIENT_SECRET}"
+      REDMINE_PLUGINS_MIGRATE: "1"
+    depends_on:
+      redmine-postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18103:3000"
+    volumes:
+      - redmine-files:/usr/src/redmine/files
+    networks:
+      - redmine-data
+      - bsystem-platform_frontend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          ruby -rnet/http -ruri -e
+          'response = Net::HTTP.get_response(URI("http://127.0.0.1:3000/login"));
+          exit(response.is_a?(Net::HTTPSuccess) ? 0 : 1)'
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+volumes:
+  redmine-postgres:
+  redmine-files:
+
+networks:
+  redmine-data:
+    internal: true
+  bsystem-platform_frontend:
+    external: true
