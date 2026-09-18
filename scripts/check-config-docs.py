@@ -82,6 +82,10 @@ UNDOCUMENTED_VARIABLES: dict[str, str] = {
 EXTERNAL_PORTS: dict[str, str] = {
     "5432": "PostgreSQL's own port, named when describing the container's internal address",
     "4222": "NATS' own port, named when describing the container's internal address",
+    "18103": (
+        "the standalone Redmine business stack publishes this loopback-only "
+        "DEV port; it is intentionally not part of the core/stage stack set"
+    ),
 }
 
 # Words that match the service-name pattern but are Compose's own vocabulary

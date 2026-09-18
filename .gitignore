@@ -33,3 +33,6 @@ __pycache__/
 *.pyc
 authentik/exports/
 docker-compose.yml.bak.*
+
+# Redmine runtime secrets.
+/redmine/redmine.env
