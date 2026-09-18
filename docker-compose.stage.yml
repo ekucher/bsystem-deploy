@@ -91,6 +91,10 @@ services:
       REDMINE_API_KEY: ${REDMINE_API_KEY:-}
       OUTLINE_URL: ${OUTLINE_URL:-}
       OUTLINE_API_KEY: ${OUTLINE_API_KEY:-}
+      # Public browser destinations for module launch. In stage/prod these
+      # should normally be HTTPS application origins.
+      MODULE_REDMINE_LAUNCH_URL: ${MODULE_REDMINE_LAUNCH_URL:-}
+      MODULE_OUTLINE_LAUNCH_URL: ${MODULE_OUTLINE_LAUNCH_URL:-}
     healthcheck:
       # /readyz rather than /health: a Core that cannot reach PostgreSQL is
       # running but cannot serve, and a healthcheck that passes in that state
