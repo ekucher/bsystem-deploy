@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+    <id>bsystem_sso</id>
+    <name>BSYSTEM SSO</name>
+    <summary>BSYSTEM local session synchronization</summary>
+    <description>
+        Synchronizes the local Nextcloud session with the current
+        central OIDC session without logging out from the IdP.
+    </description>
+    <version>0.2.0</version>
+    <licence>agpl</licence>
+    <author>BSYSTEM</author>
+    <namespace>BsystemSso</namespace>
+    <category>integration</category>
+    <dependencies>
+        <nextcloud min-version="32" max-version="32"/>
+    </dependencies>
+</info>
