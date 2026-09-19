@@ -84,6 +84,7 @@ volumes:
 
 networks:
   internal:
+    external: true
     name: ${NEXTCLOUD_INTERNAL_NETWORK:-bsystem-nextcloud-test_internal}
   frontend:
     external: true
