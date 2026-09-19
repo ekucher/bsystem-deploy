@@ -142,6 +142,7 @@ services:
       # from the server-side adapter URLs above.
       MODULE_REDMINE_LAUNCH_URL: ${MODULE_REDMINE_LAUNCH_URL:-}
       MODULE_OUTLINE_LAUNCH_URL: ${MODULE_OUTLINE_LAUNCH_URL:-}
+      MODULE_NEXTCLOUD_LAUNCH_URL: ${MODULE_NEXTCLOUD_LAUNCH_URL:-}
       # Local token validation. Empty keeps the UserInfo path, which is the
       # default and the only thing that works with an opaque access token.
       # Setting the issuer requires authentik to issue JWT access tokens.
