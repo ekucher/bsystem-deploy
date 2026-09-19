@@ -88,7 +88,11 @@ services:
     volumes:
       - ./authentik/blueprints/bsystem-groups.yaml:/blueprints/bsystem-groups.yaml:ro
       - ./authentik/blueprints/custom:/blueprints/custom:ro
-    networks: [frontend, data]
+    networks:
+      frontend:
+        aliases:
+          - auth.bsystem.local
+      data:
 
   authentik-worker:
     image: ghcr.io/goauthentik/server:2026.8.2
