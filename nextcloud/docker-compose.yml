@@ -1,0 +1,67 @@
+name: ${NEXTCLOUD_COMPOSE_PROJECT:-bsystem-nextcloud-test}
+
+services:
+  db:
+    image: ${NEXTCLOUD_DB_IMAGE:-postgres:17}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${NEXTCLOUD_POSTGRES_DB}
+      POSTGRES_USER: ${NEXTCLOUD_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_POSTGRES_PASSWORD}
+    volumes:
+      - nextcloud-db:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: ${NEXTCLOUD_DB_HEALTH_INTERVAL:-10s}
+      timeout: ${NEXTCLOUD_DB_HEALTH_TIMEOUT:-5s}
+      retries: ${NEXTCLOUD_DB_HEALTH_RETRIES:-10}
+      start_period: ${NEXTCLOUD_DB_HEALTH_START_PERIOD:-10s}
+    networks:
+      - internal
+
+  nextcloud:
+    image: ${NEXTCLOUD_IMAGE:-nextcloud:32-apache}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${NEXTCLOUD_POSTGRES_DB}
+      POSTGRES_USER: ${NEXTCLOUD_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${NEXTCLOUD_POSTGRES_PASSWORD}
+
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS:-localhost}
+    ports:
+      - "${NEXTCLOUD_BIND_ADDRESS:-127.0.0.1}:${NEXTCLOUD_HTTP_PORT:-18102}:80"
+    volumes:
+      - nextcloud-data:/var/www/html
+      - ./apps/bsystem_sso:/var/www/html/custom_apps/bsystem_sso:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'curl -fsS http://127.0.0.1/status.php | grep -q "\"installed\":true"'
+      interval: ${NEXTCLOUD_HEALTH_INTERVAL:-10s}
+      timeout: ${NEXTCLOUD_HEALTH_TIMEOUT:-5s}
+      retries: ${NEXTCLOUD_HEALTH_RETRIES:-30}
+      start_period: ${NEXTCLOUD_HEALTH_START_PERIOD:-30s}
+    networks:
+      - frontend
+      - internal
+
+volumes:
+  nextcloud-db:
+    name: ${NEXTCLOUD_DB_VOLUME:-bsystem-nextcloud-test_nextcloud-db}
+  nextcloud-data:
+    name: ${NEXTCLOUD_DATA_VOLUME:-bsystem-nextcloud-test_nextcloud-data}
+
+networks:
+  internal:
+    name: ${NEXTCLOUD_INTERNAL_NETWORK:-bsystem-nextcloud-test_internal}
+  frontend:
+    external: true
+    name: ${NEXTCLOUD_FRONTEND_NETWORK:-bsystem-platform_frontend}
