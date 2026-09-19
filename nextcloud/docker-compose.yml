@@ -53,6 +53,29 @@ services:
       - frontend
       - internal
 
+  collabora:
+    image: ${COLLABORA_IMAGE:-collabora/code:26.04.4.1.1}
+    restart: unless-stopped
+    cap_add:
+      - MKNOD
+    environment:
+      aliasgroup1: ${COLLABORA_ALIASGROUP1}
+      server_name: ${COLLABORA_SERVER_NAME:-localhost:18104}
+      extra_params: ${COLLABORA_EXTRA_PARAMS:---o:ssl.enable=false --o:mount_jail_tree=false}
+    ports:
+      - "${COLLABORA_BIND_ADDRESS:-127.0.0.1}:${COLLABORA_HTTP_PORT:-18104}:9980"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'curl -fsS http://127.0.0.1:9980/hosting/discovery >/dev/null'
+      interval: ${COLLABORA_HEALTH_INTERVAL:-10s}
+      timeout: ${COLLABORA_HEALTH_TIMEOUT:-5s}
+      retries: ${COLLABORA_HEALTH_RETRIES:-30}
+      start_period: ${COLLABORA_HEALTH_START_PERIOD:-60s}
+    networks:
+      - frontend
+      - internal
+
 volumes:
   nextcloud-db:
     name: ${NEXTCLOUD_DB_VOLUME:-bsystem-nextcloud-test_nextcloud-db}
