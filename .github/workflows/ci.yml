@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: mocks/go.mod
           cache: false
@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: loadtest/go.mod
           cache: false
@@ -270,7 +270,7 @@ jobs:
           retention-days: 90
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: e2e/go.mod
           cache: false
@@ -389,7 +389,7 @@ jobs:
           path: bsystem-integration-core
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: e2e/go.mod
           cache: false
