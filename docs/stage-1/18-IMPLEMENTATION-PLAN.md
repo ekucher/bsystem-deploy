@@ -25,6 +25,16 @@ Security: success
 
 Before implementing, re-fetch both repos and re-freeze exact working SHAs.
 
+### Canonical PROD native application URLs
+
+```text
+QA      https://qa.bravosoft.org
+Redmine https://redmine.bravosoft.org
+Wiki    https://kb.bsystem.com.ua
+```
+
+OIDC, deep-link and acceptance work must use these as the production targets.
+
 ## 2. Workstream A — Integration Core relationships
 
 Suggested branch:
@@ -120,7 +130,7 @@ Browser-controlled actor headers must be rejected/stripped.
 
 Update:
 
-- `docs/openapi.yaml`;
+- the Integration Core `openapi.yaml` file in its `docs` directory;
 - route inventory;
 - contract tests;
 - DB integration tests;
