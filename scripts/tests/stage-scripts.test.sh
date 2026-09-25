@@ -574,7 +574,7 @@ mkdir -p "$CFG_WORK"
 # Each mutation is made on a copy of the tree, never on the tracked file: a
 # test that edits what is tracked and puts it back leaves the working tree
 # wrong if it is interrupted.
-cp -r .env.example docker-compose.yml docker-compose.e2e.yml docker-compose.stage.yml "$CFG_WORK/" 2>/dev/null
+cp -r .env.example docker-compose.yml docker-compose.e2e.yml docker-compose.stage.yml docker-compose.stage1-native-apps.yml "$CFG_WORK/" 2>/dev/null
 mkdir -p "$CFG_WORK/scripts" "$CFG_WORK/docs"
 cp scripts/check-config-docs.py "$CFG_WORK/scripts/"
 cp docs/RUN-P0.md "$CFG_WORK/docs/"
