@@ -25,15 +25,24 @@ Security: success
 
 Before implementing, re-fetch both repos and re-freeze exact working SHAs.
 
-### Canonical PROD native application URLs
+### Canonical native application URL variables
 
 ```text
-QA      https://qa.bravosoft.org
-Redmine https://redmine.bravosoft.org
-Wiki    https://kb.bsystem.com.ua
+QA_PUBLIC_URL
+REDMINE_PUBLIC_URL
+OUTLINE_PUBLIC_URL
 ```
 
-OIDC, deep-link and acceptance work must use these as the production targets.
+Safe test/example values:
+
+```dotenv
+QA_PUBLIC_URL=https://qa.example
+REDMINE_PUBLIC_URL=https://redmine.example
+OUTLINE_PUBLIC_URL=https://kb.example
+```
+
+OIDC, deep-link and acceptance work must consume these variables. Real PROD
+hostnames remain in untracked deployment configuration.
 
 ## 2. Workstream A — Integration Core relationships
 
