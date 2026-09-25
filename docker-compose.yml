@@ -79,6 +79,14 @@ services:
       AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
       AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:-}
+      # Stage 1 canonical native application origins. Read by the mounted
+      # blueprints below (authentik/blueprints/custom/3x-bsystem-*.yaml) via
+      # !Env to build each native app's OAuth2 redirect_uri; not read by
+      # authentik itself. Empty leaves that provider's redirect_uri
+      # unresolved until the operator sets the real origin.
+      QA_PUBLIC_URL: ${QA_PUBLIC_URL:-}
+      REDMINE_PUBLIC_URL: ${REDMINE_PUBLIC_URL:-}
+      OUTLINE_PUBLIC_URL: ${OUTLINE_PUBLIC_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

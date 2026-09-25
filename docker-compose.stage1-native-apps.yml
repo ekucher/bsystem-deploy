@@ -1,0 +1,95 @@
+# Stage 1 native-apps-SSO runtime overlay for the BSYSTEM platform stack.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.stage1-native-apps.yml up -d
+#
+# This file adds to docker-compose.yml; it does not replace it, does not
+# touch docker-compose.e2e.yml or docker-compose.stage.yml, and every existing
+# HUB-related config is unchanged. `docker compose up -d` on its own — with no
+# `-f` for this file — starts exactly what it always has, HUB included.
+#
+# What this overlay is for: validating the Stage 1 native-apps/SSO
+# architecture (docs/stage-1/) — authentik, the Integration Core and the
+# native applications it talks to — without needing the BHUB frontend
+# running at all. It is not a deployment tier like docker-compose.stage.yml
+# (dev/stage/prod); the two overlays are independent and may be combined,
+# e.g. `-f docker-compose.yml -f docker-compose.stage1-native-apps.yml
+# -f docker-compose.stage.yml` for a stage-tier host that also has no HUB.
+#
+# How the BHUB frontend is excluded:
+#
+#   The `hub` service is tagged with the Compose profile "hub" below and
+#   nothing here activates that profile, so `docker compose ... up -d`
+#   never starts, builds or requires it — confirm with
+#   `docker compose -f docker-compose.yml -f docker-compose.stage1-native-apps.yml
+#   config --services`, which will not list `hub`. Add `--profile hub` (or
+#   `COMPOSE_PROFILES=hub`) to bring it back deliberately.
+#
+# What is brought up instead: postgres, nats, authentik-server,
+# authentik-worker and integration-core from the base file — all unmodified
+# here — plus mock-redmine and mock-outline below, deterministic Go mock
+# upstreams (the same binaries docker-compose.e2e.yml uses) standing in for
+# the real Redmine/Outline installations wherever those are not locally
+# available, wired into integration-core's REDMINE_URL/OUTLINE_URL. QA has no
+# equivalent server-side adapter in Integration Core (see QA_PUBLIC_URL in
+# .env.example: QA is a caller of Integration Core's service API, not an
+# upstream Integration Core calls out to) and so has no mock container here;
+# its own dev server is run separately.
+name: bsystem-platform
+
+services:
+  hub:
+    profiles: ["hub"]
+
+  integration-core:
+    environment:
+      REDMINE_URL: http://mock-redmine:8091
+      REDMINE_API_KEY: test-redmine-api-key
+      OUTLINE_URL: http://mock-outline:8092
+      OUTLINE_API_KEY: test-outline-api-key
+    depends_on:
+      mock-redmine:
+        condition: service_healthy
+      mock-outline:
+        condition: service_healthy
+
+  mock-redmine:
+    build:
+      context: ./mocks
+      args:
+        MOCK: mock-redmine
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # A scratch image with one static binary: no shell, no package manager, no
+    # writes, nothing to gain a capability with.
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":8091"
+      REDMINE_API_KEY: test-redmine-api-key
+    healthcheck:
+      test: ["CMD", "/mock", "-healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  mock-outline:
+    build:
+      context: ./mocks
+      args:
+        MOCK: mock-outline
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    environment:
+      HTTP_ADDR: ":8092"
+      OUTLINE_API_KEY: test-outline-api-key
+    healthcheck:
+      test: ["CMD", "/mock", "-healthcheck"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks: [backend]

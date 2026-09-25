@@ -23,9 +23,12 @@ import sys
 
 STAGE_FILES = [
     "docker-compose.stage.yml",
+    "docker-compose.stage1-native-apps.yml",
     ".env.example",
     "docs/STAGE-ACCEPTANCE.md",
     "docs/AUTHENTIK-STAGE.md",
+    "docs/AUTHENTIK-OIDC.md",
+    "docs/SERVICE-IDENTITIES.md",
     "docs/BACKUP-RESTORE.md",
     "docs/TENANT-ISOLATION-MATRIX.md",
     "docs/STAGE-HANDOFF.md",
@@ -34,6 +37,14 @@ STAGE_FILES = [
     "scripts/stage-smoke.sh",
     "scripts/stage-smoke.ps1",
     "scripts/release-manifest.sh",
+    # Stage 1 native-apps/SSO blueprints: each builds a redirect URI from an
+    # operator-supplied public URL via !Env, and 40- mints an API token for
+    # each new service identity from another. Both are exactly the kind of
+    # file a real value gets pasted into "to see if it works".
+    "authentik/blueprints/custom/30-bsystem-redmine.yaml",
+    "authentik/blueprints/custom/31-bsystem-qa.yaml",
+    "authentik/blueprints/custom/32-bsystem-outline.yaml",
+    "authentik/blueprints/custom/40-bsystem-service-identities.yaml",
 ]
 
 # Deliberately case-sensitive and anchored to an ALL-CAPS identifier. A
@@ -62,6 +73,7 @@ HOST = re.compile(r"(?i)\bhttps?://([a-z0-9][a-z0-9.-]*)")
 ALLOWED_HOSTS = {
     "localhost", "127.0.0.1", "0.0.0.0", "::1",
     "postgres", "nats", "authentik-server", "integration-core", "hub",
+    "mock-redmine", "mock-outline",
     "spec.openapis.org", "www.rfc-editor.org", "tools.ietf.org",
     "github.com", "docs.github.com", "opensource.org",
 }

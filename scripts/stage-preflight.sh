@@ -283,6 +283,16 @@ main() {
   # platform cannot authenticate. A check that read it as one was written,
   # failed two existing tests, and was wrong rather than the tests.
 
+  head_ "Native application origins"
+  # These are Stage 1 canonical browser-visible origins (see .env.example);
+  # empty is a supported configuration (the corresponding native-app OIDC
+  # provider's redirect_uri simply stays unresolved until set), so nothing
+  # here is a failure on its own.
+  for name in QA_PUBLIC_URL REDMINE_PUBLIC_URL OUTLINE_PUBLIC_URL; do
+    optional_var "$name"
+    check_url "$name" 1
+  done
+
   head_ "Source systems"
   for pair in "ESPOCRM_URL ESPOCRM_API_KEY" "REDMINE_URL REDMINE_API_KEY" "OUTLINE_URL OUTLINE_API_KEY"; do
     set -- $pair

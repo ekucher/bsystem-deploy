@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# Stage 1 native application service identities: SVC-redmine, SVC-qa,
+# SVC-outline.
+#
+# These are the backend/plugin-side callers of Integration Core's
+# /api/service/v1/* surface — distinct from, and unrelated to, the human-SSO
+# applications in 30/31/32-bsystem-*.yaml. Each is a non-interactive
+# authentik service_account, following the same service_account + static API
+# token shape as 20-bsystem-integration-core-admin.yaml, placed in the
+# existing BSYSTEM-Services group per docs/SERVICE-IDENTITIES.md. Integration
+# Core mints the stable SVC-* Global ID itself on that identity's first
+# accepted service request; nothing here allocates one.
+#
+# See docs/SERVICE-IDENTITIES.md for the exact permission table and for the
+# current limitation this setup is subject to: today every BSYSTEM-Services
+# member resolves to the single 'service-core' role, so SVC-redmine,
+# SVC-qa and SVC-outline are equally privileged in Integration Core until a
+# follow-up there adds per-service groups/roles. That gap is recorded, not
+# hidden: it is out of scope for this repository (bsystem-integration-core
+# owns RBAC/scopes).
+
+version: 1
+
+metadata:
+  name: BSYSTEM - Native Application Service Identities
+
+context:
+  svc_redmine_token: !Env [SVC_REDMINE_TOKEN, null]
+  svc_qa_token: !Env [SVC_QA_TOKEN, null]
+  svc_outline_token: !Env [SVC_OUTLINE_TOKEN, null]
+
+entries:
+
+  # ============================================================
+  # SVC-redmine
+  # ============================================================
+
+  - id: svc-redmine-user
+    model: authentik_core.user
+    identifiers:
+      username: svc-redmine
+    attrs:
+      name: BSYSTEM Service Identity - Redmine
+      type: service_account
+      is_active: true
+      groups:
+        - !Find [authentik_core.group, [name, BSYSTEM-Services]]
+
+  - model: authentik_core.token
+    state: present
+    conditions:
+      - !If [!Context svc_redmine_token]
+    identifiers:
+      identifier: bsystem-svc-redmine
+      intent: api
+      expiring: false
+      user: !KeyOf svc-redmine-user
+    attrs:
+      key: !Context svc_redmine_token
+
+  # ============================================================
+  # SVC-qa
+  # ============================================================
+
+  - id: svc-qa-user
+    model: authentik_core.user
+    identifiers:
+      username: svc-qa
+    attrs:
+      name: BSYSTEM Service Identity - QA
+      type: service_account
+      is_active: true
+      groups:
+        - !Find [authentik_core.group, [name, BSYSTEM-Services]]
+
+  - model: authentik_core.token
+    state: present
+    conditions:
+      - !If [!Context svc_qa_token]
+    identifiers:
+      identifier: bsystem-svc-qa
+      intent: api
+      expiring: false
+      user: !KeyOf svc-qa-user
+    attrs:
+      key: !Context svc_qa_token
+
+  # ============================================================
+  # SVC-outline
+  # ============================================================
+
+  - id: svc-outline-user
+    model: authentik_core.user
+    identifiers:
+      username: svc-outline
+    attrs:
+      name: BSYSTEM Service Identity - Outline
+      type: service_account
+      is_active: true
+      groups:
+        - !Find [authentik_core.group, [name, BSYSTEM-Services]]
+
+  - model: authentik_core.token
+    state: present
+    conditions:
+      - !If [!Context svc_outline_token]
+    identifiers:
+      identifier: bsystem-svc-outline
+      intent: api
+      expiring: false
+      user: !KeyOf svc-outline-user
+    attrs:
+      key: !Context svc_outline_token
