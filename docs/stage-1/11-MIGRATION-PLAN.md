@@ -2,16 +2,23 @@
 
 ## Production targets
 
-Canonical PROD native application URLs:
+Canonical production endpoints are supplied through:
 
 ```text
-QA      https://qa.bravosoft.org
-Redmine https://redmine.bravosoft.org
-Wiki    https://kb.bsystem.com.ua
+QA_PUBLIC_URL
+REDMINE_PUBLIC_URL
+OUTLINE_PUBLIC_URL
 ```
 
-These endpoints are migration targets. Stage 1 changes must not assume different
-production hostnames unless this document is updated first.
+Safe test/example configuration:
+
+```dotenv
+QA_PUBLIC_URL=https://qa.example
+REDMINE_PUBLIC_URL=https://redmine.example
+OUTLINE_PUBLIC_URL=https://kb.example
+```
+
+Real PROD values remain in the untracked deployment environment.
 
 ## Phase 0 — Freeze and inventory
 
