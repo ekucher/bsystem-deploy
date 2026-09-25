@@ -85,6 +85,8 @@ Integration Core becomes authoritative for cross-system relationships.
 14. [14-ACCEPTANCE-CRITERIA.md](14-ACCEPTANCE-CRITERIA.md)
 15. [15-TEST-MATRIX.md](15-TEST-MATRIX.md)
 16. [16-OPEN-DECISIONS.md](16-OPEN-DECISIONS.md)
+17. [17-INTEGRATION-CORE-AUDIT.md](17-INTEGRATION-CORE-AUDIT.md)
+18. [18-IMPLEMENTATION-PLAN.md](18-IMPLEMENTATION-PLAN.md)
 
 ## 6. Stage 1 invariants
 
