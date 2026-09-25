@@ -108,11 +108,15 @@ It may store only the minimum metadata required to:
 
 Redmine, QA and Outline must remain independently addressable.
 
+### Production application URLs
+
 ```text
-user -> redmine.example
-user -> qa.example
-user -> wiki.example
+QA      -> https://qa.bravosoft.org
+Redmine -> https://redmine.bravosoft.org
+Wiki    -> https://kb.bsystem.com.ua
 ```
+
+These are the canonical Stage 1 production entry points for the native applications.
 
 BHUB availability is irrelevant in Stage 1.
 
@@ -144,12 +148,14 @@ There is no Level A BHUB shell in Stage 1.
 
 Each object type must define a canonical deep-link function independent of Integration Core storage.
 
-Examples:
+Examples for PROD:
 
 ```text
-Redmine issue -> https://redmine.example/issues/{id}
-QA test case  -> https://qa.example/testcases/{id}
-QA bug        -> https://qa.example/bugs/{id}
-QA task       -> https://qa.example/tasks/{id}
-Outline doc   -> canonical Outline document URL
+Redmine issue -> https://redmine.bravosoft.org/issues/{id}
+QA test case  -> https://qa.bravosoft.org/testcases/{id}
+QA bug        -> https://qa.bravosoft.org/bugs/{id}
+QA task       -> https://qa.bravosoft.org/tasks/{id}
+Outline/Wiki  -> https://kb.bsystem.com.ua/<native-document-path>
 ```
+
+The exact Outline document path remains native to Outline and must not be reconstructed from mutable document titles.
