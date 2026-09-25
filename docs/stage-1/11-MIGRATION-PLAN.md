@@ -1,5 +1,18 @@
 # Stage 1 Migration Plan
 
+## Production targets
+
+Canonical PROD native application URLs:
+
+```text
+QA      https://qa.bravosoft.org
+Redmine https://redmine.bravosoft.org
+Wiki    https://kb.bsystem.com.ua
+```
+
+These endpoints are migration targets. Stage 1 changes must not assume different
+production hostnames unless this document is updated first.
+
 ## Phase 0 — Freeze and inventory
 
 - record exact repository SHAs;
@@ -9,6 +22,7 @@
 - inventory existing QA↔Redmine links;
 - inventory current OIDC settings;
 - inventory application URLs and callback URLs;
+- verify that PROD application URLs match the canonical targets above;
 - verify backups.
 
 ## Phase 1 — Documentation and contracts
@@ -42,6 +56,9 @@ Configure:
 - MFA policy;
 - access entitlements;
 - logout behavior.
+
+Production redirect/origin configuration must be derived from the canonical
+production URLs, not from development hostnames.
 
 ## Phase 3 — Identity binding inventory
 
@@ -144,7 +161,8 @@ Implement the smallest maintainable Outline integration.
 
 ## Phase 12 — Acceptance and cutover
 
-Run the full test matrix.
+Run the full test matrix against the production hostnames and the exact release
+candidate configuration before production activation.
 
 Do not declare Stage 1 complete until exact deployed SHAs and test evidence are recorded.
 
