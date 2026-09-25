@@ -54,18 +54,26 @@ Integration Core becomes authoritative for cross-system relationships.
                     audit / integration metadata
 ```
 
-## Production application endpoints
+## Native application endpoints
 
-Canonical Stage 1 PROD entry points:
+Stage 1 uses deployment variables for browser-visible native application origins:
 
 ```text
-QA      https://qa.bravosoft.org
-Redmine https://redmine.bravosoft.org
-Wiki    https://kb.bsystem.com.ua
+QA_PUBLIC_URL
+REDMINE_PUBLIC_URL
+OUTLINE_PUBLIC_URL
 ```
 
-These are native application endpoints; Stage 1 does not place a BHUB UI in
-front of them.
+Safe documentation/test values:
+
+```dotenv
+QA_PUBLIC_URL=https://qa.example
+REDMINE_PUBLIC_URL=https://redmine.example
+OUTLINE_PUBLIC_URL=https://kb.example
+```
+
+Real PROD hostnames are stored only in the untracked deployment environment.
+Stage 1 does not place a BHUB UI in front of these native applications.
 
 ## 4. Source-of-truth model
 
