@@ -54,6 +54,19 @@ Integration Core becomes authoritative for cross-system relationships.
                     audit / integration metadata
 ```
 
+## Production application endpoints
+
+Canonical Stage 1 PROD entry points:
+
+```text
+QA      https://qa.bravosoft.org
+Redmine https://redmine.bravosoft.org
+Wiki    https://kb.bsystem.com.ua
+```
+
+These are native application endpoints; Stage 1 does not place a BHUB UI in
+front of them.
+
 ## 4. Source-of-truth model
 
 | Domain | Source of Truth |
