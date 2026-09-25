@@ -1,5 +1,13 @@
 # Stage 1 Acceptance Criteria
 
+## Production endpoints
+
+- [ ] QA canonical PROD entry point is `https://qa.bravosoft.org`.
+- [ ] Redmine canonical PROD entry point is `https://redmine.bravosoft.org`.
+- [ ] Wiki/Outline canonical PROD entry point is `https://kb.bsystem.com.ua`.
+- [ ] OIDC redirect/origin configuration uses the intended canonical PROD hostnames.
+- [ ] Cross-system deep links do not point to DEV/STAGE hosts in PROD.
+
 ## Identity / SSO
 
 - [ ] Redmine uses Authentik for ordinary interactive authentication.
