@@ -2,6 +2,7 @@
 
 | Document | What it answers |
 | --- | --- |
+| [stage-1/README.md](stage-1/README.md) | canonical Stage 1 architecture: Authentik SSO, native Redmine/QA/Outline and cross-system relationships |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | the decisions a real deployment makes |
 | [E2E-ENVIRONMENT.md](E2E-ENVIRONMENT.md) | the credential-free stack CI runs |
 | [AUTHENTIK-OIDC.md](AUTHENTIK-OIDC.md) | identity provider setup |
@@ -15,6 +16,15 @@
 
 `CLAUDE.md` and `TASKS.md` in this repository are the canonical copies for the
 whole platform. A copy anywhere else is a copy.
+
+Stage 1 architecture is canonical under:
+
+```text
+docs/stage-1/
+```
+
+Where older BHUB/product documentation conflicts with the Stage 1 scope, the
+Stage 1 documentation governs Stage 1 implementation.
 
 ## Historical
 
