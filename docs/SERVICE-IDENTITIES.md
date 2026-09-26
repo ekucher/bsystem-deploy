@@ -85,3 +85,38 @@ curl \
 ```
 
 P0.3 initially exposes planned adapters as disabled until their credentials/configuration are supplied.
+
+## Stage 1 native application service identities
+
+`authentik/blueprints/custom/40-bsystem-service-identities.yaml` provisions
+three concrete service identities for the Stage 1 native applications, each a
+non-interactive `service_account` in `BSYSTEM-Services`, with a static API
+token minted from `SVC_REDMINE_TOKEN` / `SVC_QA_TOKEN` / `SVC_OUTLINE_TOKEN`
+in `.env` (see `.env.example`). Each token is used only by that one
+application's own backend/plugin as the bearer credential it presents to
+Integration Core's `/api/service/v1/*` surface — never by a browser, never
+by another application.
+
+| authentik username | caller | Integration Core permissions actually required |
+|---|---|---|
+| `svc-redmine` | `redmine_bsystem_integration` plugin (`core_client.rb`): lists, creates and deletes relationship edges for the issue-page Related Objects panel | `relationships.read`, `relationships.write` |
+| `svc-qa` | QA's cross-system links UI (docs/stage-1/09-QA-INTEGRATION.md workstream C: reuses the existing link/unlink flow against Integration Core instead of QA's own local tables) | `relationships.read`, `relationships.write` |
+| `svc-outline` | Outline's Related Objects surface (docs/stage-1/10-OUTLINE-INTEGRATION.md section 7: a read-only "Related Work" panel; no add/remove relation is specified for Outline, unlike Redmine's D3 and QA's link/unlink flow) | `relationships.read` only |
+
+None of the three receives the `*` wildcard service permission, and
+`svc-outline` deliberately does not receive `relationships.write`: it only
+ever lists relationships, so it should not be able to create or delete one.
+
+**Current limitation, recorded rather than hidden:** Integration Core today
+maps every member of `BSYSTEM-Services` to the single `service-core` role
+(`internal/platformdb/migrations/003_rbac_scopes.sql`,
+`020_relationship_permissions.sql` in `bsystem-integration-core`), which
+already carries both `relationships.read` and `relationships.write`. Until
+Integration Core adds per-service authentik groups (for example
+`BSYSTEM-Service-Redmine`, `BSYSTEM-Service-QA`, `BSYSTEM-Service-Outline`)
+mapped to per-service roles — an additive `group_role_mappings` /
+`role_permissions` migration owned by that repository, not this one —
+`svc-outline` is provisioned into the same coarse group as the other two and
+is in practice as privileged as they are. The table above is this
+deployment's declared target grant for that follow-up, not a claim that it is
+already enforced.

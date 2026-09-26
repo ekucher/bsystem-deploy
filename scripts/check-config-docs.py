@@ -49,7 +49,12 @@ ComposeLoader.add_multi_constructor(
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-STACKS = ["docker-compose.yml", "docker-compose.e2e.yml", "docker-compose.stage.yml"]
+STACKS = [
+    "docker-compose.yml",
+    "docker-compose.e2e.yml",
+    "docker-compose.stage.yml",
+    "docker-compose.stage1-native-apps.yml",
+]
 ENV_EXAMPLE = ROOT / ".env.example"
 
 VARIABLE = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)")

@@ -145,6 +145,31 @@ curl -i http://localhost:8080/api/v1/me
 docker compose logs -f authentik-server authentik-worker integration-core hub
 ```
 
+## 9. Stage 1 native application SSO
+
+Three more mounted blueprints each declare a fourth, independent OIDC
+application/provider, the same shape as BSYSTEM-HUB above:
+
+- `authentik/blueprints/custom/30-bsystem-redmine.yaml` — Redmine
+- `authentik/blueprints/custom/31-bsystem-qa.yaml` — QA
+- `authentik/blueprints/custom/32-bsystem-outline.yaml` — Outline
+
+Each provider's redirect URI is built from `REDMINE_PUBLIC_URL` /
+`QA_PUBLIC_URL` / `OUTLINE_PUBLIC_URL` (see `.env.example`) and each
+application grants exactly one coarse entitlement — `redmine.access`,
+`qa.access`, `outline.access` — meaning only "this person may reach the app
+at all". None of the three attempts to model that app's own
+project/document-level permissions; those stay native to each app.
+
+A fourth blueprint, `authentik/blueprints/custom/40-bsystem-service-identities.yaml`,
+provisions the backend/plugin-side service identities (`svc-redmine`,
+`svc-qa`, `svc-outline`) these apps use to call Integration Core. See
+`docs/SERVICE-IDENTITIES.md` for what each is allowed to do there.
+
+`docker-compose.stage1-native-apps.yml` brings up a Stage 1 runtime that
+needs none of this to include the HUB frontend; see that file's header
+comment.
+
 ## Security notes
 
 - Use HTTPS for STAGE and PROD.

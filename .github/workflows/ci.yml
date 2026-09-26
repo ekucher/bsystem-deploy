@@ -118,6 +118,21 @@ jobs:
       - name: Check stage container hardening
         run: python3 scripts/check-hardening.py "docker-compose.yml+docker-compose.stage.yml"
 
+      - name: Validate the Stage 1 native-apps Compose overlay
+        run: docker compose -f docker-compose.yml -f docker-compose.stage1-native-apps.yml config --quiet
+
+      - name: Check Stage 1 native-apps container hardening
+        run: python3 scripts/check-hardening.py "docker-compose.yml+docker-compose.stage1-native-apps.yml"
+
+      # The overlay's own header promises the platform starts "without
+      # needing the BHUB frontend running at all". Nothing else here would
+      # notice `hub` quietly creeping back into it — check-hardening.py would
+      # simply harden it like any other service — so this asserts the
+      # resolved service list actually omits it and that the Compose profile
+      # gating it is still in place.
+      - name: Check the Stage 1 overlay excludes the BHUB frontend
+        run: python3 scripts/check-stage1-overlay.py
+
   stage-assets:
     name: Stage assets
     runs-on: ubuntu-latest
@@ -200,6 +215,17 @@ jobs:
       # the sibling checkout.
       - name: Check the BSYSTEM group names agree
         run: python3 scripts/check-identity-groups.py
+
+      # The Stage 1 native application service identities are supposed to be
+      # least-privilege — svc-outline in particular is documented as
+      # read-only because it only ever lists relationships. Integration Core
+      # cannot yet enforce that per-service (see docs/SERVICE-IDENTITIES.md),
+      # so this is a static check against the declared intent rather than a
+      # runtime authorization test; it still catches the table quietly
+      # drifting to claim more access than a caller needs, or an identity
+      # losing its documentation entirely.
+      - name: Check Stage 1 service identity permissions stay least-privilege
+        run: python3 scripts/check-service-identity-scopes.py
 
   e2e:
     name: Autonomous E2E

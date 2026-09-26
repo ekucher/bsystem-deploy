@@ -1,0 +1,282 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# Stage 1 native application: QA.
+#
+# QA (bsystem-code/qa) remains authoritative for its own test cases, bugs and
+# accounts (see docs/stage-1/09-QA-INTEGRATION.md); this blueprint only lets a
+# human sign into QA directly through authentik and grants the coarse
+# "can reach this app at all" entitlement. It does not attempt to model QA's
+# own per-project/per-record permissions.
+#
+# Follows the same four-part shape as 10-bsystem-hub.yaml: invalidation flow,
+# OAuth2/OIDC provider, application, entitlement + policy bindings.
+
+version: 1
+
+metadata:
+  name: BSYSTEM - QA
+
+context:
+  # Browser-visible canonical origin for QA (see .env.example). Empty leaves
+  # the redirect_uri pointing nowhere until the operator sets it.
+  qa_public_url: !Env [QA_PUBLIC_URL, ""]
+
+entries:
+
+  # ============================================================
+  # QA Provider-specific invalidation flow
+  # ============================================================
+
+  - id: bsystem-qa-invalidation-flow
+    model: authentik_flows.flow
+
+    identifiers:
+      slug: bsystem-qa-invalidation-flow
+
+    attrs:
+      designation: invalidation
+      name: BSYSTEM - QA logout
+      title: "You've logged out of QA."
+      authentication: none
+
+  - id: bsystem-qa-invalidation-logout-binding
+    model: authentik_flows.flowstagebinding
+
+    identifiers:
+      order: 0
+      stage: !Find
+        - authentik_stages_user_logout.userlogoutstage
+        - [name, default-invalidation-logout]
+      target: !KeyOf bsystem-qa-invalidation-flow
+
+
+  # ============================================================
+  # QA OAuth2 / OpenID Connect Provider
+  #
+  # Redirect URI matches the QA app's own callback route
+  # (app/api/auth/sso/callback, see lib/oidc.js in bsystem-code/qa).
+  # ============================================================
+
+  - id: bsystem-qa-provider
+    model: authentik_providers_oauth2.oauth2provider
+
+    identifiers:
+      name: Provider for QA
+
+    attrs:
+      authorization_flow: !Find
+        - authentik_flows.flow
+        - [slug, default-provider-authorization-implicit-consent]
+
+      invalidation_flow: !KeyOf bsystem-qa-invalidation-flow
+
+      client_type: public
+
+      grant_types:
+        - authorization_code
+
+      redirect_uris:
+        - matching_mode: strict
+          redirect_uri_type: authorization
+          url: !Format ["%s/api/auth/sso/callback", !Context qa_public_url]
+
+      access_code_validity: minutes=1
+      access_token_validity: minutes=5
+      refresh_token_validity: days=30
+      refresh_token_threshold: hours=1
+
+      sub_mode: hashed_user_id
+      issuer_mode: per_provider
+      include_claims_in_id_token: true
+
+      signing_key: !Find
+        - authentik_crypto.certificatekeypair
+        - [name, authentik Self-signed Certificate]
+
+      property_mappings:
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, goauthentik.io/providers/oauth2/scope-openid]
+
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, goauthentik.io/providers/oauth2/scope-profile]
+
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, goauthentik.io/providers/oauth2/scope-email]
+
+        - !Find
+          - authentik_providers_oauth2.scopemapping
+          - [managed, goauthentik.io/providers/oauth2/scope-entitlements]
+
+      logout_method: backchannel
+      logout_uri: ""
+
+  # ============================================================
+  # QA Application
+  # ============================================================
+
+  - id: bsystem-qa-application
+    model: authentik_core.application
+
+    identifiers:
+      slug: bsystem-qa
+
+    attrs:
+      name: QA
+      provider: !KeyOf bsystem-qa-provider
+
+      group: BSYSTEM-QA-App
+      policy_engine_mode: any
+
+      meta_launch_url: !Context qa_public_url
+      meta_publisher: BSYSTEM
+      meta_description: Native test case and bug tracking
+
+      meta_hide: false
+      open_in_new_tab: false
+
+
+  # ============================================================
+  # QA Application Entitlement
+  #
+  # Coarse "can reach this app at all" only. Test-case/bug-level permissions
+  # stay entirely inside QA, per the architecture's native-authorization
+  # invariant — this blueprint does not and must not attempt to model them.
+  # ============================================================
+
+  - id: entitlement-qa-access
+    model: authentik_core.applicationentitlement
+    identifiers:
+      app: !KeyOf bsystem-qa-application
+      name: qa.access
+    attrs:
+      attributes: {}
+
+
+  # ============================================================
+  # QA Application Access Bindings
+  #
+  # Same staff groups as BSYSTEM-HUB, minus BSYSTEM-Customers: QA is an
+  # internal delivery tool, not a customer-facing surface.
+  # ============================================================
+
+  - id: qa-app-binding-admins
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-qa-application
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - id: qa-app-binding-managers
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-qa-application
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+  - id: qa-app-binding-developers
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-qa-application
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Developers]]
+      enabled: true
+      negate: false
+
+  - id: qa-app-binding-qa
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-qa-application
+      order: 30
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-QA]]
+      enabled: true
+      negate: false
+
+  - id: qa-app-binding-support
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-qa-application
+      order: 40
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Support]]
+      enabled: true
+      negate: false
+
+  - id: qa-app-binding-devops
+    model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf bsystem-qa-application
+      order: 50
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-DevOps]]
+      enabled: true
+      negate: false
+
+
+  # ============================================================
+  # Entitlement: qa.access
+  # ============================================================
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-qa-access
+      order: 0
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Admins]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-qa-access
+      order: 10
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Managers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-qa-access
+      order: 20
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Developers]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-qa-access
+      order: 30
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-QA]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-qa-access
+      order: 40
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-Support]]
+      enabled: true
+      negate: false
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !KeyOf entitlement-qa-access
+      order: 50
+    attrs:
+      group: !Find [authentik_core.group, [name, BSYSTEM-DevOps]]
+      enabled: true
+      negate: false

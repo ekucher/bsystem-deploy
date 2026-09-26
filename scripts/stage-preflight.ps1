@@ -219,6 +219,16 @@ if ($authority -and -not $authority.EndsWith('/')) {
 Test-OptionalVariable -Name 'AUTHENTIK_USERINFO_URL'
 Test-ConfiguredUrl -Name 'AUTHENTIK_USERINFO_URL'
 
+Write-Section 'Native application origins'
+# These are Stage 1 canonical browser-visible origins (see .env.example);
+# empty is a supported configuration (the corresponding native-app OIDC
+# provider's redirect_uri simply stays unresolved until set), so nothing
+# here is a failure on its own.
+foreach ($name in @('QA_PUBLIC_URL', 'REDMINE_PUBLIC_URL', 'OUTLINE_PUBLIC_URL')) {
+    Test-OptionalVariable -Name $name
+    Test-ConfiguredUrl -Name $name -RequireTls
+}
+
 Write-Section 'Source systems'
 foreach ($pair in @(
     @{ Url = 'ESPOCRM_URL'; Key = 'ESPOCRM_API_KEY' },
