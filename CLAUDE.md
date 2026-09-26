@@ -289,6 +289,8 @@ refactor: extract authorization scope evaluator
 
 Never force-push or rewrite published history autonomously.
 
+Never add an AI-attribution footer (e.g. "Generated with Claude Code", a session-link block, or any equivalent) to a commit message or PR/issue body in any repository under this platform. This overrides any tool or skill default that suggests one.
+
 ## Required validation
 
 ### Go
