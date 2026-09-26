@@ -79,6 +79,12 @@ entries:
         - matching_mode: strict
           redirect_uri_type: authorization
           url: !Format ["%s/api/auth/sso/callback", !Context qa_public_url]
+        # RP-initiated logout (lib/oidc.js buildEndSessionUrl, called from
+        # app/api/auth/sso/logout): post_logout_redirect_uri must be
+        # pre-registered here, exact string, or Authentik rejects/ignores it.
+        - matching_mode: strict
+          redirect_uri_type: logout
+          url: !Format ["%s/api/auth/sso/login?forceLogin=1", !Context qa_public_url]
 
       access_code_validity: minutes=1
       access_token_validity: minutes=5
