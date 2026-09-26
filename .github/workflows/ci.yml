@@ -193,6 +193,14 @@ jobs:
       - name: Check stage assets carry no secret-like value
         run: python3 scripts/check-stage-secrets.py
 
+      # check-stage-secrets.py is scoped to a curated list of stage-adjacent
+      # files. This is the repo-wide sweep: a real hostname can land in a
+      # test file or a code comment just as easily as a stage asset -- that
+      # is exactly how it happened once, in a sibling repository's test file,
+      # during a Stage 1 SSO round.
+      - name: Check no real hostnames are committed anywhere in the repo
+        run: python3 scripts/check-no-real-hostnames.py
+
       - name: Check acceptance docs reference paths that exist
         run: python3 scripts/check-doc-links.py
 
