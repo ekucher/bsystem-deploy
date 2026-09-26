@@ -6,6 +6,104 @@ Work autonomously on the BSYSTEM Platform using `TASKS.md` as the prioritized ba
 
 Do not ask for routine confirmation. Stop only when work requires real production credentials, destructive production actions, irreversible external changes, or an owner-only business decision.
 
+## bsystem-deploy: commands and architecture
+
+This section is specific to working inside `bsystem-deploy` itself (the repo
+you are checked out in right now). It does not apply to the sibling repos.
+
+### Compose stacks
+
+- `docker-compose.yml` — P0 foundation: PostgreSQL 17, NATS 2.11 (JetStream),
+  authentik 2026.8.2 (`server` + `worker`), `bsystem-integration-core`,
+  `bsystem-hub`. No Redis (removed once nothing used it — see `README.md`).
+- `docker-compose.e2e.yml` (+ `docker-compose.e2e.images.yml`) — same shape
+  but against deterministic mock upstreams (`mocks/`), no real credentials.
+- `docker-compose.stage.yml` — STAGE overlay on top of the base file.
+- `docker-compose.stage1-native-apps.yml` — Stage 1 native-app/SSO overlay;
+  deliberately excludes the `hub` frontend (enforced by
+  `scripts/check-stage1-overlay.py`).
+
+Validate any Compose file with `docker compose ... config --quiet` before
+relying on it; an overlay only validates layered on its base file, never
+alone.
+
+### Go modules
+
+Three independent modules, each with its own `go.mod`: `mocks/`, `e2e/`,
+`loadtest/`. For any of them:
+
+```bash
+cd <module> && gofmt -l . && go vet ./... && go test -race ./...
+```
+
+### Running the E2E stack locally
+
+```bash
+docker compose -f docker-compose.e2e.yml up -d --build --wait
+(cd e2e && E2E_BASE_URL=http://127.0.0.1:8080 go test ./... -v)
+docker compose -f docker-compose.e2e.yml down -v
+```
+
+`e2e/` scenarios skip silently without `E2E_BASE_URL`/`E2E_REQUIRED` set, so a
+green `go test ./...` on a bare checkout proves nothing ran, not that
+everything passed — only trust a run against a live stack.
+
+### Validation scripts (`scripts/check-*.py`)
+
+Run before pushing; each guards a specific silent-drift failure mode (details
+in each script's docstring and in `CONTRIBUTING.md`):
+
+- `check-hardening.py` — Compose services keep `no-new-privileges`, dropped
+  capabilities, read-only root FS, no wildcard-interface port publishing.
+- `check-artifacts.py` — no compiled binary/archive tracked in Git (checked
+  by file bytes, not filename).
+- `check-identity-groups.py` — the BSYSTEM group name agrees across
+  `authentik/blueprints/bsystem-groups.yaml`, `mocks/cmd/mock-identity`, docs,
+  and (when `bsystem-integration-core` is checked out beside this repo) the
+  Integration Core's RBAC seed.
+- `check-global-ids.py` — Global ID prefixes here agree with the Integration
+  Core's `global_id_counters` seed (Integration Core checkout required).
+- `check-service-identity-scopes.py` — Stage 1 service identities in
+  `docs/SERVICE-IDENTITIES.md` stay least-privilege as documented.
+- `check-config-docs.py` — docs, `.env.example`, and Compose files agree on
+  variables/ports/service names.
+- `check-doc-links.py` / `check-documented-endpoints.py` — documented paths
+  and API endpoints actually exist.
+- `check-scan-coverage.py` — every Go module is covered by the security
+  scanner matrix.
+- `check-stage-secrets.py` — stage assets carry no credential-shaped
+  real-looking value.
+- `check-stage1-overlay.py` — the Stage 1 overlay still excludes `hub`.
+
+### Shell/PowerShell stage scripts
+
+`scripts/stage-preflight.sh|ps1` and `scripts/stage-smoke.sh|ps1` are the
+operational scripts run against a STAGE deployment; `scripts/tests/` holds
+their own test suite (`bash scripts/tests/stage-scripts.test.sh`). CI lints
+them with `shellcheck` and parses the PowerShell ones with the PS parser —
+keep both variants behaviorally identical when changing one.
+
+### Repo-specific architecture notes
+
+- `mocks/cmd/{mock-identity,mock-espocrm,mock-redmine,mock-outline}` are
+  deterministic fake upstreams that let the whole platform be exercised
+  end-to-end with no owner credentials.
+- `e2e/` is a Go test harness (not `go test`-only — needs the Compose stack
+  up) covering cross-service behavior: lifecycle, resilience, rate limiting,
+  outbox, backup/restore, AI gateway, notifications. The valuable scenarios
+  are the negative ones — see `CONTRIBUTING.md`.
+- `authentik/blueprints/` holds real-deployment identity blueprints; these
+  must stay in lockstep with the mock identity provider and the Integration
+  Core's RBAC seed (see `check-identity-groups.py` above).
+- `docs/stage-1/01-SCOPE.md` … `18-IMPLEMENTATION-PLAN.md` is the numbered
+  design-doc set that is the authority for the Stage 1 native-app/SSO work.
+- CI (`.github/workflows/ci.yml`) has five jobs: `mocks`, `compose`,
+  `stage-assets`, `e2e`, `backup`. The `e2e` and `backup` jobs check out
+  `bsystem-integration-core` beside this repo — matching branch name if one
+  exists, else `main` — and `backup` runs isolated because it destroys its
+  own database and would otherwise bury one real failure under a wall of
+  downstream ones.
+
 ## Multi-repository workspace
 
 Expected sibling repositories:
@@ -190,6 +288,8 @@ refactor: extract authorization scope evaluator
 ```
 
 Never force-push or rewrite published history autonomously.
+
+Never add an AI-attribution footer (e.g. "Generated with Claude Code", a session-link block, or any equivalent) to a commit message or PR/issue body in any repository under this platform. This overrides any tool or skill default that suggests one.
 
 ## Required validation
 
