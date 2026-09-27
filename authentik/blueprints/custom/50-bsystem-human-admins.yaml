@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# Break-glass bootstrap for a human administrator account with Authentik
+# superuser rights (full admin-interface access — the same tier as the
+# built-in `akadmin`), as opposed to the BSYSTEM-Admins group
+# (authentik/blueprints/bsystem-groups.yaml), which is scoped to
+# application-level admin roles in QA/Redmine/etc and deliberately carries
+# is_superuser: false.
+#
+# Authentik has no per-user is_superuser flag: it is a computed property
+# (authentik_core.models.User.is_superuser) derived from membership in any
+# Group with is_superuser: true. The built-in "authentik Admins" group
+# (akadmin's own group) is that group here — this blueprint adds a member to
+# it, it does not create a new one.
+#
+# Deliberately parameterized rather than naming a real person: this repo is
+# public, and a real username/name pair here would be exactly the kind of
+# leak scripts/check-stage-secrets.py exists to catch for hostnames. Set
+# BOOTSTRAP_ADMIN_USERNAME (and optionally _NAME) per operator/environment
+# via .env, never in this file. Leaving BOOTSTRAP_ADMIN_USERNAME empty skips
+# every entry below — no account is created.
+#
+# Password is set once, on first creation, from an operator-provided env var
+# (state: present + a non-empty condition — same pattern as
+# 40-bsystem-service-identities.yaml's tokens). Leaving it empty creates the
+# account in a password-less/inactive-login state on first apply; set it
+# before the very first reconcile, or use Authentik's own "forgot password"
+# flow afterwards to set a real password without ever putting it in this repo.
+
+version: 1
+
+metadata:
+  name: BSYSTEM - Human Superuser Bootstrap
+
+context:
+  bootstrap_admin_username: !Env [BOOTSTRAP_ADMIN_USERNAME, null]
+  bootstrap_admin_name: !Env [BOOTSTRAP_ADMIN_NAME, "BSYSTEM Bootstrap Administrator"]
+  bootstrap_admin_password: !Env [BOOTSTRAP_ADMIN_PASSWORD, null]
+
+entries:
+
+  - id: bootstrap-admin-user
+    model: authentik_core.user
+    state: present
+    conditions:
+      - !If [!Context bootstrap_admin_username]
+    identifiers:
+      username: !Context bootstrap_admin_username
+    attrs:
+      name: !Context bootstrap_admin_name
+      type: internal
+      is_active: true
+      groups:
+        - !Find [authentik_core.group, [name, "authentik Admins"]]
+
+  - model: authentik_core.user
+    state: present
+    conditions:
+      - !If [!Context bootstrap_admin_username]
+      - !If [!Context bootstrap_admin_password]
+    identifiers:
+      username: !Context bootstrap_admin_username
+    attrs:
+      password: !Context bootstrap_admin_password
