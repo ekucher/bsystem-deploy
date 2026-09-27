@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=https://goauthentik.io/blueprints/schema.json
+#
+# Human administrator accounts that need Authentik superuser rights (full
+# admin-interface access — the same tier as the built-in `akadmin`), as
+# opposed to the BSYSTEM-Admins group (authentik/blueprints/bsystem-groups.yaml),
+# which is scoped to application-level admin roles in QA/Redmine/etc and
+# deliberately carries is_superuser: false.
+#
+# Authentik has no per-user is_superuser flag: it is a computed property
+# (authentik_core.models.User.is_superuser) derived from membership in any
+# Group with is_superuser: true. The built-in "authentik Admins" group (akadmin's
+# own group) is that group here — this blueprint adds members to it, it does
+# not create a new one.
+#
+# Password is set once, on first creation, from an operator-provided env var
+# (state: present + a non-empty condition — same pattern as
+# 40-bsystem-service-identities.yaml's tokens). Leaving the env var empty
+# creates the account in a password-less/inactive-login state on first apply;
+# set it before the very first reconcile, or use Authentik's own
+# "forgot password" flow afterwards to set a real password without ever
+# putting it in this repo.
+
+version: 1
+
+metadata:
+  name: BSYSTEM - Human Superuser Accounts
+
+context:
+  e_kucher_bootstrap_password: !Env [E_KUCHER_BOOTSTRAP_PASSWORD, null]
+
+entries:
+
+  - id: e-kucher-user
+    model: authentik_core.user
+    identifiers:
+      username: e.kucher
+    attrs:
+      name: Evgen Kucher
+      type: internal
+      is_active: true
+      groups:
+        - !Find [authentik_core.group, [name, "authentik Admins"]]
+
+  - model: authentik_core.user
+    state: present
+    conditions:
+      - !If [!Context e_kucher_bootstrap_password]
+    identifiers:
+      username: e.kucher
+    attrs:
+      password: !Context e_kucher_bootstrap_password
