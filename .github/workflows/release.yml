@@ -114,7 +114,7 @@ jobs:
             up -d --wait --wait-timeout 300
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: e2e/go.mod
           cache: false
