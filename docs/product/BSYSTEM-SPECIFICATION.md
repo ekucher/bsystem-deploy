@@ -75,7 +75,7 @@ Operations observe only the server/environment required to operate a BSYSTEM-sup
                 Tasks                           Operations / AI
 ```
 
-The native application UI of an upstream engine may remain available for administrators or exceptional workflows, but normal BSYSTEM workflows should enter through HUB when the normalized capability exists.
+Direct module access is first-class. HUB is the primary corporate workspace and launcher, but it is not a mandatory reverse proxy or authentication gateway. Each application remains an independent OIDC client of authentik and may be opened at its canonical URL. Where a normalized BSYSTEM workflow exists, HUB provides the unified experience without removing direct native access.
 
 ## 6. Identity and administration
 
@@ -322,7 +322,27 @@ For applicable features, acceptance requires:
 - tests are non-vacuous;
 - CI/Security remain green.
 
-## 20. Related specifications
+## 20. Remote Management
+
+Remote Management is a platform capability with a separate control plane and data plane. The accepted baseline is WireGuard + RDP for primary administration, Zabbix over the management overlay for monitoring, and self-hosted RustDesk as fallback.
+
+HUB provides Remote Management UX; Integration Core enforces authorization and normalized contracts; deployment/runtime components such as WG Hub, ACL/firewall, Zabbix and RustDesk remain outside HUB.
+
+Managed customer servers require no inbound public WAN ports for normal Remote Management operation. Access is deny-by-default, customer-isolated and based on unique engineer/device identities.
+
+Detailed documentation is under `../remote-management/`.
+
+## 21. Current / Target / Gap
+
+This specification defines TARGET architecture. It must not be cited as proof that a capability is currently implemented.
+
+For implementation/audit work always distinguish:
+
+- CURRENT — verified in GitHub/runtime/CI/deployment;
+- TARGET — this approved architectural direction;
+- GAP — required implementation work.
+
+## 22. Related specifications
 
 - `DOMAIN-MODEL.md`
 - `DATA-OWNERSHIP.md`
@@ -330,3 +350,5 @@ For applicable features, acceptance requires:
 - `UX-FLOWS.md`
 - `MVP-ROADMAP.md`
 - `../adr/ADR-001-unified-workspace-specialized-engines.md`
+- `../BSYSTEM-HUB-MASTER-CONTEXT.md`
+- `../remote-management/README.md`
